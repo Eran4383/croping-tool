@@ -13,7 +13,6 @@
   <style>
     :root { --primary: #4f46e5; --primary-hover: #4338ca; }
     
-    /* Allow natural scrolling on body for pull-to-refresh on mobile */
     body { 
       font-family: 'Assistant', sans-serif; 
       background-color: #f8fafc; 
@@ -27,7 +26,7 @@
       -webkit-overflow-scrolling: touch;
     }
 
-    /* Lock body scroll ONLY when editor is open */
+    /* Lock body scroll ONLY when editor is active to allow pull-to-refresh normally */
     body.editor-active {
       overflow: hidden;
       height: 100vh;
@@ -36,7 +35,6 @@
     .animate-in { animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* ReactCrop Custom Styling */
     .ReactCrop { 
       z-index: 100 !important; 
       max-width: 100%;
@@ -124,7 +122,6 @@
     .aspect-visual {
       border: 2px solid currentColor;
       border-radius: 4px;
-      transition: all 0.2s;
     }
 
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -147,13 +144,12 @@
     import React, { useState, useEffect, useRef, useCallback } from 'react';
     import { createRoot } from 'react-dom/client';
     import { 
-      Upload, Scissors, Download, Trash2, X, Check, 
-      Plus, ChevronLeft, ChevronRight, Layers, Settings2, Minus,
-      Copy, ImageIcon, RefreshCw, Maximize
+      Upload, Scissors, Download, X, Check, 
+      Plus, ChevronLeft, ChevronRight, Copy, ImageIcon, RefreshCw, Minus
     } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 
-    const VERSION = "v1.1.5";
+    const VERSION = "v1.1.6";
 
     const App = () => {
       const [images, setImages] = useState([]);
@@ -168,7 +164,6 @@
       
       const imgRef = useRef(null);
 
-      // Effect to handle scroll locking
       useEffect(() => {
         if (editingIndex !== null) {
           document.body.classList.add('editor-active');
@@ -203,21 +198,16 @@
         setSelectedIds(new Set());
       };
 
-      // Improved crop initialization - always 100% fill
       const calculateInitialCrop = (img, targetAspect) => {
         if (!img) return;
         const { naturalWidth: width, naturalHeight: height } = img;
-        
-        // If targetAspect is undefined, we use the image's own aspect to fill the whole thing
         const effectiveAspect = targetAspect !== undefined ? targetAspect : (width / height);
         
-        // Start with 100% width or height based on what fits the aspect
         const newCrop = centerCrop(
           makeAspectCrop({ unit: '%', width: 100 }, effectiveAspect, width, height),
           width, height
         );
         
-        // Safety check to ensure height/width are never 0
         if (newCrop.height <= 0) newCrop.height = 100;
         if (newCrop.width <= 0) newCrop.width = 100;
         
@@ -232,8 +222,7 @@
           setCrop(currentImg.lastCrop);
           setAspect(currentImg.lastAspect);
         } else {
-          const ic = calculateInitialCrop(e.currentTarget, aspect);
-          setCrop(ic);
+          setCrop(calculateInitialCrop(e.currentTarget, aspect));
         }
         setZoom(1);
       };
@@ -241,8 +230,7 @@
       const changeAspect = (newAspect) => {
         setAspect(newAspect);
         if (imgRef.current) {
-          const ic = calculateInitialCrop(imgRef.current, newAspect);
-          setCrop(ic);
+          setCrop(calculateInitialCrop(imgRef.current, newAspect));
         }
       };
 
@@ -320,12 +308,12 @@
       return (
         <div className="flex flex-col min-h-screen">
           
-          <header className="h-16 bg-white border-b px-6 flex items-center justify-between z-40 sticky top-0">
+          <header className="h-16 bg-white border-b px-6 flex items-center justify-between z-40 sticky top-0 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg"><Scissors size={20}/></div>
               <div className="flex flex-col md:flex-row md:items-center">
                 <h1 className="text-xl font-black text-slate-900 leading-none">Bulk Crop</h1>
-                <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full md:mr-3 font-bold mt-1 md:mt-0 self-start md:self-auto">
+                <span className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full md:mr-3 font-bold mt-1 md:mt-0 self-start md:self-auto shadow-sm">
                   {VERSION}
                 </span>
               </div>
@@ -350,12 +338,12 @@
                 onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.accept="image/*"; i.onchange=e=>handleFiles(e.target.files); i.click(); }}
                 className="min-h-[50vh] border-4 border-dashed border-slate-200 bg-white rounded-[3rem] flex flex-col items-center justify-center cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/20 transition-all group"
               >
-                <div className="p-8 bg-slate-50 rounded-full mb-6 group-hover:scale-110 group-hover:bg-indigo-50 transition-all">
+                <div className="p-8 bg-slate-50 rounded-full mb-6 group-hover:scale-110 group-hover:bg-indigo-50 transition-all shadow-inner">
                   <Upload size={48} className="text-slate-300 group-hover:text-indigo-600"/>
                 </div>
                 <h2 className="text-2xl font-black text-slate-800 text-center">בחר או גרור תמונות</h2>
                 <p className="text-slate-400 font-bold mt-2 text-center px-6">העלאה מרובה מהגלריה • בחירה בגרירה • חיתוך קבוצתי</p>
-                <p className="text-[10px] text-slate-300 mt-4 font-black uppercase tracking-widest">Pull down on mobile to refresh page</p>
+                <p className="text-[10px] text-indigo-400 mt-4 font-black uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full">Pull down to refresh</p>
               </div>
             ) : (
               <div className="max-w-7xl mx-auto space-y-10 animate-in">
@@ -414,9 +402,9 @@
 
           <footer className="py-10 text-center border-t border-slate-100 bg-white">
              <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">
-               Bulk Crop Engine {VERSION} • Last Update: {new Date().toLocaleTimeString()}
+               Bulk Crop Engine {VERSION} • {new Date().toLocaleTimeString()}
              </p>
-             <p className="text-[9px] text-slate-400 mt-2 font-bold">גרירה למטה במובייל לריענון הדף</p>
+             <p className="text-[9px] text-slate-400 mt-2 font-bold uppercase tracking-widest">Pull down on mobile to refresh page</p>
           </footer>
 
           {editingIndex !== null && (
@@ -427,7 +415,7 @@
                 </div>
                 <div className="flex items-center gap-4">
                   <button onClick={applyToAll} className="flex items-center gap-2 px-6 py-2.5 bg-white text-slate-900 rounded-xl text-[11px] font-black shadow-xl hover:bg-slate-100 transition-all">
-                    <Copy size={16}/> החל הגדרה על כולם
+                    <Copy size={16}/> החל על כולם
                   </button>
                   <button onClick={() => setEditingIndex(null)} className="p-2 text-slate-500 hover:text-white transition-all"><X size={28}/></button>
                 </div>
