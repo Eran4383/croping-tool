@@ -31,13 +31,12 @@
       height: 100vh;
     }
     
-    .animate-in { animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-in { animation: fadeIn 0.2s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
     .ReactCrop { 
       z-index: 100 !important; 
-      max-width: 100%;
-      max-height: 100%;
+      direction: ltr !important;
     }
     .ReactCrop__crop-selection { 
       z-index: 110 !important;
@@ -48,9 +47,9 @@
     .ReactCrop__drag-handle { 
       z-index: 120 !important;
       background-color: var(--primary) !important;
-      width: 18px !important;
-      height: 18px !important;
-      border-radius: 6px;
+      width: 24px !important;
+      height: 24px !important;
+      border-radius: 50%;
       border: 2px solid white !important;
     }
 
@@ -61,6 +60,7 @@
       background: #020617;
       display: flex;
       flex-direction: column;
+      direction: ltr !important;
     }
 
     .editor-stage {
@@ -84,17 +84,8 @@
     .crop-target {
       display: block;
       max-width: 100%;
-      max-height: 80vh;
+      max-height: 65vh;
       object-fit: contain;
-    }
-
-    .selectable-card {
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .selectable-card.selected {
-      outline: 4px solid var(--primary);
-      outline-offset: -4px;
-      transform: scale(0.94);
     }
 
     .aspect-btn {
@@ -102,13 +93,13 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      padding: 12px 6px;
-      border-radius: 14px;
+      gap: 4px;
+      padding: 8px 12px;
+      border-radius: 10px;
       border: 1px solid #1e293b;
       background: #0f172a;
-      color: #64748b;
-      font-size: 11px;
+      color: #94a3b8;
+      font-size: 10px;
       font-weight: 800;
       transition: all 0.2s;
     }
@@ -116,11 +107,6 @@
       background: var(--primary);
       color: white;
       border-color: var(--primary);
-      box-shadow: 0 8px 15px rgba(79, 70, 229, 0.3);
-    }
-    .aspect-visual {
-      border: 2px solid currentColor;
-      border-radius: 4px;
     }
 
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -144,17 +130,16 @@
     import { createRoot } from 'react-dom/client';
     import { 
       Upload, Scissors, Download, X, Check, 
-      Plus, ChevronLeft, ChevronRight, Copy, ImageIcon, RefreshCw, Minus
+      Plus, ChevronLeft, ChevronRight, Copy, ImageIcon, RefreshCw, Minus, Loader2
     } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 
-    const VERSION = "v1.1.8";
+    const VERSION = "v1.2.0";
 
     const App = () => {
       const [images, setImages] = useState([]);
       const [editingIndex, setEditingIndex] = useState(null);
-      const [selectedIds, setSelectedIds] = useState(new Set());
-      const [isDraggingSelection, setIsDraggingSelection] = useState(false);
+      const [isProcessing, setIsProcessing] = useState(false);
       
       const [crop, setCrop] = useState();
       const [aspect, setAspect] = useState(undefined);
@@ -163,11 +148,8 @@
       const imgRef = useRef(null);
 
       useEffect(() => {
-        if (editingIndex !== null) {
-          document.body.classList.add('editor-active');
-        } else {
-          document.body.classList.remove('editor-active');
-        }
+        if (editingIndex !== null) document.body.classList.add('editor-active');
+        else document.body.classList.remove('editor-active');
       }, [editingIndex]);
 
       const handleFiles = useCallback((files) => {
@@ -182,41 +164,17 @@
         setImages(prev => [...prev, ...newFiles]);
       }, []);
 
-      const toggleSelect = (id) => {
-        setSelectedIds(prev => {
-          const next = new Set(prev);
-          if (next.has(id)) next.delete(id);
-          else next.add(id);
-          return next;
-        });
-      };
-
-      const handleBatchDelete = () => {
-        setImages(prev => prev.filter(img => !selectedIds.has(img.id)));
-        setSelectedIds(new Set());
-      };
-
       const calculateInitialCrop = (img, targetAspect) => {
         if (!img) return;
-        const width = img.naturalWidth || img.width;
-        const height = img.naturalHeight || img.height;
-        const effectiveAspect = targetAspect !== undefined ? targetAspect : (width / height);
-        
-        const newCrop = centerCrop(
-          makeAspectCrop({ unit: '%', width: 100 }, effectiveAspect, width, height),
-          width, height
-        );
-        
-        if (newCrop.height <= 0) newCrop.height = 100;
-        if (newCrop.width <= 0) newCrop.width = 100;
-        
-        return newCrop;
+        const nw = img.naturalWidth || img.width;
+        const nh = img.naturalHeight || img.height;
+        const effectiveAspect = targetAspect !== undefined ? targetAspect : (nw / nh);
+        return centerCrop(makeAspectCrop({ unit: '%', width: 90 }, effectiveAspect, nw, nh), nw, nh);
       };
 
       const onImageLoad = (e) => {
         imgRef.current = e.currentTarget;
         const currentImg = images[editingIndex];
-        
         if (currentImg?.lastCrop) {
           setCrop(currentImg.lastCrop);
           setAspect(currentImg.lastAspect);
@@ -226,65 +184,41 @@
         setZoom(1);
       };
 
-      const changeAspect = (newAspect) => {
-        setAspect(newAspect);
-        if (imgRef.current) {
-          setCrop(calculateInitialCrop(imgRef.current, newAspect));
-        }
-      };
-
-      const applyToAll = () => {
-        if (!crop) return;
-        setImages(prev => prev.map(img => ({
-          ...img,
-          lastCrop: { ...crop },
-          lastAspect: aspect,
-          cropped: null 
-        })));
-        alert('הגדרות החיתוך הוחלו על כל התמונות בהצלחה!');
-      };
-
       const processImage = async (imgData, cropState) => {
-        if (!cropState || cropState.width === 0 || cropState.height === 0) return null;
-        
-        const image = new Image();
-        image.src = imgData.url;
-        await new Promise(r => image.onload = r);
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Convert percentage to actual pixels relative to natural dimensions
-        const scaleX = image.naturalWidth / 100;
-        const scaleY = image.naturalHeight / 100;
-
-        const targetX = cropState.x * scaleX;
-        const targetY = cropState.y * scaleY;
-        const targetWidth = cropState.width * scaleX;
-        const targetHeight = cropState.height * scaleY;
-
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-
-        ctx.drawImage(
-          image,
-          targetX, targetY, targetWidth, targetHeight,
-          0, 0, targetWidth, targetHeight
-        );
-        
-        return new Promise(resolve => {
-          canvas.toBlob(blob => resolve(URL.createObjectURL(blob)), 'image/jpeg', 0.95);
+        if (!cropState || !cropState.width) return null;
+        return new Promise((resolve) => {
+          const image = new Image();
+          image.src = imgData.url;
+          image.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const nw = image.naturalWidth;
+            const nh = image.naturalHeight;
+            const x = (cropState.x * nw) / 100;
+            const y = (cropState.y * nh) / 100;
+            const w = (cropState.width * nw) / 100;
+            const h = (cropState.height * nh) / 100;
+            canvas.width = w;
+            canvas.height = h;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(image, x, y, w, h, 0, 0, w, h);
+            canvas.toBlob(b => b ? resolve(URL.createObjectURL(b)) : resolve(null), 'image/jpeg', 0.92);
+          };
+          image.onerror = () => resolve(null);
         });
       };
 
       const handleSaveCurrent = async () => {
+        setIsProcessing(true);
         const croppedUrl = await processImage(images[editingIndex], crop);
-        setImages(prev => prev.map((img, i) => 
-          i === editingIndex ? { ...img, cropped: croppedUrl, lastCrop: crop, lastAspect: aspect } : img
-        ));
-        
-        if (editingIndex < images.length - 1) setEditingIndex(editingIndex + 1);
-        else setEditingIndex(null);
+        if (croppedUrl) {
+          setImages(prev => prev.map((img, i) => 
+            i === editingIndex ? { ...img, cropped: croppedUrl, lastCrop: crop, lastAspect: aspect } : img
+          ));
+          if (editingIndex < images.length - 1) setEditingIndex(editingIndex + 1);
+          else setEditingIndex(null);
+        }
+        setIsProcessing(false);
       };
 
       const downloadAll = async () => {
@@ -294,193 +228,86 @@
           if (!finalUrl) continue;
           const link = document.createElement('a');
           link.href = finalUrl;
-          link.download = `bulk-${i+1}-${img.name}`;
+          link.download = `crop-${i+1}-${img.name}`;
           link.click();
           await new Promise(r => setTimeout(r, 400));
         }
       };
 
       return (
-        <div className="flex flex-col min-h-screen">
-          
+        <div className="flex flex-col min-h-screen" dir="rtl">
           <header className="h-16 bg-white border-b px-6 flex items-center justify-between z-40 sticky top-0 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg"><Scissors size={20}/></div>
-              <div className="flex flex-col md:flex-row md:items-center">
-                <h1 className="text-xl font-black text-slate-900 leading-none">Bulk Crop</h1>
-                <span className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full md:mr-3 font-bold mt-1 md:mt-0 self-start md:self-auto shadow-sm">
-                  {VERSION}
-                </span>
-              </div>
+              <h1 className="text-xl font-black text-slate-900">Bulk Crop Pro</h1>
+              <span className="text-[10px] font-bold text-slate-400">v{VERSION}</span>
             </div>
-            <div className="flex gap-2">
-              {images.length > 0 && selectedIds.size > 0 && (
-                <button onClick={handleBatchDelete} className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-xs font-black hover:bg-red-100 flex items-center gap-2">
-                   מחק ({selectedIds.size})
-                </button>
-              )}
-              {images.length > 0 && (
-                <button onClick={() => setEditingIndex(0)} className="bg-indigo-600 text-white px-6 py-2 rounded-xl text-xs font-black shadow-xl hover:bg-indigo-700 transition-all active:scale-95">
-                  עריכה קבוצתית
-                </button>
-              )}
-            </div>
+            {images.length > 0 && (
+              <button onClick={() => setEditingIndex(0)} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-xl">
+                עריכה קבוצתית
+              </button>
+            )}
           </header>
 
-          <main className="flex-1 p-6 md:p-12">
+          <main className="flex-1 p-4 md:p-12">
             {images.length === 0 ? (
               <div 
                 onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.accept="image/*"; i.onchange=e=>handleFiles(e.target.files); i.click(); }}
-                className="min-h-[50vh] border-4 border-dashed border-slate-200 bg-white rounded-[3rem] flex flex-col items-center justify-center cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/20 transition-all group"
+                className="min-h-[60vh] border-4 border-dashed border-slate-200 bg-white rounded-[2rem] flex flex-col items-center justify-center cursor-pointer"
               >
-                <div className="p-8 bg-slate-50 rounded-full mb-6 group-hover:scale-110 group-hover:bg-indigo-50 transition-all shadow-inner">
-                  <Upload size={48} className="text-slate-300 group-hover:text-indigo-600"/>
-                </div>
-                <h2 className="text-2xl font-black text-slate-800 text-center">בחר או גרור תמונות</h2>
-                <p className="text-slate-400 font-bold mt-2 text-center px-6">העלאה מרובה • חיתוך אחיד • הורדה מהירה</p>
-                <p className="text-[10px] text-indigo-400 mt-4 font-black uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full">Pull down to refresh</p>
+                <Upload size={48} className="text-slate-300 mb-6"/>
+                <h2 className="text-xl font-black text-slate-800">בחר או גרור תמונות</h2>
               </div>
             ) : (
-              <div className="max-w-7xl mx-auto space-y-10 animate-in">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
-                  <div>
-                    <h2 className="text-2xl font-black text-slate-900">הגלריה שלך</h2>
-                    <p className="text-slate-400 text-xs font-black mt-1 uppercase tracking-widest">{images.length} תמונות נבחרו</p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <button onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.accept="image/*"; i.onchange=e=>handleFiles(e.target.files); i.click(); }}
-                            className="p-4 bg-slate-50 text-slate-500 rounded-2xl hover:bg-slate-100 border border-slate-100 shadow-sm transition-all"><Plus size={24}/></button>
-                    <button onClick={downloadAll} className="px-10 py-4 bg-slate-900 text-white rounded-[1.2rem] font-black text-sm hover:bg-black shadow-2xl flex items-center gap-3 active:scale-95 transition-all">
-                      <Download size={20}/> הורד הכל (מעובד)
-                    </button>
-                  </div>
+              <div className="max-w-7xl mx-auto space-y-6">
+                <div className="flex justify-between items-center bg-white p-6 rounded-[1.5rem] border border-slate-100 shadow-sm">
+                   <h2 className="text-xl font-black">הגלריה שלך ({images.length})</h2>
+                   <button onClick={downloadAll} className="px-8 py-3 bg-slate-900 text-white rounded-xl font-black">הורד הכל</button>
                 </div>
-
-                <div 
-                  className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6"
-                  onMouseUp={() => setIsDraggingSelection(false)}
-                >
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
                   {images.map((img, idx) => (
-                    <div 
-                      key={img.id} 
-                      onMouseDown={(e) => { setIsDraggingSelection(true); toggleSelect(img.id); }}
-                      onMouseEnter={() => { if(isDraggingSelection) toggleSelect(img.id); }}
-                      className={`selectable-card group relative bg-white p-2.5 rounded-[1.8rem] border border-slate-100 shadow-md cursor-pointer ${selectedIds.has(img.id) ? 'selected' : 'hover:border-indigo-300'}`}
-                    >
-                      <div className="aspect-square relative rounded-[1.4rem] overflow-hidden bg-slate-50">
+                    <div key={img.id} className="bg-white p-2 rounded-[1.2rem] border border-slate-100 shadow-md">
+                      <div className="aspect-square relative rounded-[0.8rem] overflow-hidden">
                         <img src={img.cropped || img.url} className="w-full h-full object-cover" />
-                        <div className={`absolute top-3 right-3 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${selectedIds.has(img.id) ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white/40 border-white/60 opacity-0 group-hover:opacity-100'}`}>
-                          {selectedIds.has(img.id) && <Check size={18} strokeWidth={4}/>}
-                        </div>
-                        {img.cropped && !selectedIds.has(img.id) && (
-                          <div className="absolute inset-0 bg-emerald-500/10 flex items-center justify-center">
-                            <span className="bg-emerald-500 text-white px-4 py-1 rounded-full text-[10px] font-black uppercase shadow-lg">מעובד</span>
-                          </div>
-                        )}
                       </div>
-                      <div className="mt-3 px-2 flex items-center justify-between">
-                        <p className="text-[10px] font-black text-slate-400 truncate uppercase max-w-[80%]">{img.name}</p>
-                        <button onClick={(e) => { e.stopPropagation(); setEditingIndex(idx); }} className="text-indigo-600 p-2 hover:bg-indigo-50 rounded-xl">
-                          <ImageIcon size={18}/>
-                        </button>
-                      </div>
+                      <button onClick={() => setEditingIndex(idx)} className="mt-2 text-indigo-600 w-full flex justify-center py-1"><ImageIcon size={18}/></button>
                     </div>
                   ))}
-                  <button onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.accept="image/*"; i.onchange=e=>handleFiles(e.target.files); i.click(); }}
-                          className="aspect-square border-4 border-dashed border-slate-100 bg-white rounded-[1.8rem] flex flex-col items-center justify-center gap-3 text-slate-300 hover:border-indigo-200 hover:text-indigo-500 transition-all group">
-                    <Plus size={40}/><span className="text-[11px] font-black uppercase">הוסף עוד</span>
-                  </button>
                 </div>
               </div>
             )}
           </main>
 
-          <footer className="py-10 text-center border-t border-slate-100 bg-white">
-             <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">
-               Bulk Crop Engine {VERSION} • {new Date().toLocaleTimeString()}
-             </p>
-             <p className="text-[9px] text-slate-400 mt-2 font-bold uppercase tracking-widest">Pull down on mobile to refresh page</p>
-          </footer>
-
           {editingIndex !== null && (
-            <div className="editor-container animate-in">
-              <header className="h-14 px-8 flex justify-between items-center bg-slate-900/80 backdrop-blur-xl border-b border-white/5 shrink-0">
-                <div className="flex items-center gap-4">
-                  <div className="bg-indigo-600 text-white px-5 py-1.5 rounded-full text-[11px] font-black tracking-widest">{editingIndex + 1} / {images.length}</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <button onClick={applyToAll} className="flex items-center gap-2 px-6 py-2.5 bg-white/10 text-white rounded-xl text-[11px] font-black shadow-xl hover:bg-white/20 transition-all active:scale-95">
-                    <Copy size={16}/> החל על כולם
-                  </button>
-                  <button onClick={() => setEditingIndex(null)} className="p-2 text-slate-500 hover:text-white transition-all"><X size={28}/></button>
-                </div>
+            <div className="editor-container" dir="ltr">
+              <header className="h-14 px-4 bg-slate-900 border-b border-white/5 flex justify-between items-center">
+                <span className="text-white text-[11px] font-black">{editingIndex + 1} / {images.length}</span>
+                <button onClick={() => setEditingIndex(null)} className="text-slate-400"><X size={24}/></button>
               </header>
-
-              <div className="flex-1 flex overflow-hidden">
-                <aside className="w-20 md:w-64 bg-slate-900 border-l border-white/5 p-6 space-y-10 overflow-y-auto no-scrollbar shrink-0 order-2 md:order-1">
-                  <div>
-                    <label className="text-[11px] font-black text-slate-500 uppercase block mb-6 tracking-widest">יחס חיתוך</label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[
-                        {l: '1:1', v: 1, w: 22, h: 22}, 
-                        {l: '16:9', v: 16/9, w: 28, h: 16}, 
-                        {l: '9:16', v: 9/16, w: 16, h: 28}, 
-                        {l: 'חופשי', v: undefined, w: 24, h: 20}
-                      ].map(a => (
-                        <button key={a.l} onClick={() => changeAspect(a.v)} className={`aspect-btn ${aspect === a.v ? 'active' : ''}`}>
-                          <div className="aspect-visual" style={{ width: a.w, height: a.h }}></div>
-                          {a.l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <button onClick={() => setCrop(calculateInitialCrop(imgRef.current, aspect))} className="w-full py-4 border border-white/10 text-slate-500 hover:text-white rounded-2xl transition-all text-[11px] font-black uppercase flex items-center justify-center gap-2 active:scale-95">
-                    <RefreshCw size={14}/> אפס מסגרת
-                  </button>
-                </aside>
-
-                <section className="editor-stage order-1 md:order-2">
-                  <div className="image-workspace" style={{ transform: `scale(${zoom})` }}>
-                    <ReactCrop 
-                      crop={crop} 
-                      onChange={c => setCrop(c)} 
-                      aspect={aspect}
-                      keepSelection
-                      unit="%"
-                    >
-                      <img ref={imgRef} src={images[editingIndex].url} onLoad={onImageLoad} className="crop-target shadow-2xl"/>
-                    </ReactCrop>
-                  </div>
-                </section>
+              <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+                 <aside className="bg-slate-900 p-4 shrink-0 flex gap-2 md:flex-col overflow-x-auto no-scrollbar">
+                    {[
+                      {l: '1:1', v: 1, w: 18, h: 18}, 
+                      {l: '16:9', v: 16/9, w: 24, h: 14}, 
+                      {l: '9:16', v: 9/16, w: 14, h: 24}
+                    ].map(a => (
+                      <button key={a.l} onClick={() => changeAspect(a.v)} className={`aspect-btn shrink-0 ${aspect === a.v ? 'active' : ''}`}>
+                         {a.l}
+                      </button>
+                    ))}
+                 </aside>
+                 <section className="editor-stage bg-black relative">
+                   {isProcessing && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50"><Loader2 className="animate-spin text-white" size={32}/></div>}
+                   <div className="image-workspace" style={{ transform: `scale(${zoom})` }}>
+                     <ReactCrop crop={crop} onChange={c => setCrop(c)} aspect={aspect} unit="%">
+                       <img ref={imgRef} src={images[editingIndex].url} onLoad={onImageLoad} className="crop-target select-none" draggable={false}/>
+                     </ReactCrop>
+                   </div>
+                 </section>
               </div>
-
-              <footer className="h-24 bg-slate-900 border-t border-white/5 px-10 flex items-center justify-between shrink-0 z-20">
-                <div className="flex items-center gap-4">
-                  <button 
-                    onClick={() => setEditingIndex(i => Math.max(0, i-1))} 
-                    disabled={editingIndex === 0}
-                    className="w-14 h-14 bg-white/5 text-white rounded-2xl disabled:opacity-10 transition-all hover:bg-white/10 flex items-center justify-center"
-                  >
-                    <ChevronRight size={32}/>
-                  </button>
-                  <button 
-                    onClick={() => setEditingIndex(null)} 
-                    className="h-14 px-6 bg-red-500/10 text-red-500 rounded-2xl font-black text-xs hover:bg-red-500/20 transition-all active:scale-95"
-                  >
-                    ביטול
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-6 bg-white/5 p-3 rounded-2xl border border-white/5">
-                   <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className="p-2 text-slate-500 hover:text-white transition-all"><Minus size={22}/></button>
-                   <span className="text-[12px] font-black text-white w-14 text-center">{Math.round(zoom * 100)}%</span>
-                   <button onClick={() => setZoom(z => Math.min(5, z + 0.25))} className="p-2 text-slate-500 hover:text-white transition-all"><Plus size={22}/></button>
-                </div>
-
-                <button onClick={handleSaveCurrent} className="px-12 md:px-16 h-14 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-2xl shadow-indigo-900/50 hover:bg-indigo-700 transition-all flex items-center gap-3 active:scale-95">
-                  {editingIndex === images.length - 1 ? 'אישור וסיום' : 'אישור והמשך'} <Check size={22}/>
-                </button>
+              <footer className="bg-slate-900 p-4 flex gap-4" dir="rtl">
+                <button onClick={() => setEditingIndex(null)} className="flex-1 h-12 bg-white/5 text-white rounded-xl font-black">ביטול</button>
+                <button onClick={handleSaveCurrent} className="flex-1 h-12 bg-indigo-600 text-white rounded-xl font-black">אישור והמשך</button>
               </footer>
             </div>
           )}
