@@ -1,5 +1,5 @@
 {
-  "name": "bulk-crop-pro",
+  "name": "bulk-crop",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,10 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "lucide-react": "^0.562.0",
-    "react-image-crop": "^11.0.10"
+    "react": "19",
+    "react-dom": "19",
+    "lucide-react": "0.460.0",
+    "react-image-crop": "11.0.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
