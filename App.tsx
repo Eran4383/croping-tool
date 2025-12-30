@@ -5,12 +5,13 @@ import { ImageCard } from './components/ImageCard';
 import { CropModal } from './components/CropModal';
 import { ImageItem, PixelCrop } from './types';
 import { getCroppedImg } from './utils/imageHelpers';
-import { Download, Layers, Trash2, Github, Plus } from 'lucide-react';
+import { Download, Layers, Trash2, Github, Plus, Settings2, Square, RectangleHorizontal, RectangleVertical } from 'lucide-react';
 
 const App: React.FC = () => {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [editingImageId, setEditingImageId] = useState<string | null>(null);
   const [isProcessingAll, setIsProcessingAll] = useState(false);
+  const [globalAspect, setGlobalAspect] = useState<number | undefined>(1);
 
   const handleFilesAdded = useCallback((files: File[]) => {
     const validFiles = files.filter(f => f.type.startsWith('image/'));
@@ -95,11 +96,11 @@ const App: React.FC = () => {
   };
 
   const handleDownloadAll = async () => {
+    if (images.length === 0) return;
     setIsProcessingAll(true);
-    // Sequence downloads to avoid browser blocking multiple triggers
     for (let i = 0; i < images.length; i++) {
       handleDownload(images[i]);
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 300)); // Delay to prevent browser blocking
     }
     setIsProcessingAll(false);
   };
@@ -118,11 +119,11 @@ const App: React.FC = () => {
               <span className="text-xl font-black tracking-tight text-slate-900">InstaCrop</span>
             </div>
             <div className="flex items-center gap-6">
-              <span className="hidden md:inline-flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full">
-                <kbd className="bg-white border border-slate-200 px-1 rounded shadow-sm">CTRL+V</kbd> to paste anywhere
+              <span className="hidden md:inline-flex items-center gap-2 text-[10px] font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full uppercase tracking-wider">
+                Local Only • No Uploads
               </span>
-              <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-slate-900 transition-colors">
-                <Github size={22} />
+              <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-slate-900 transition-colors">
+                <Github size={20} />
               </a>
             </div>
           </div>
@@ -130,37 +131,71 @@ const App: React.FC = () => {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12">
-        <header className="text-center mb-16">
-          <h1 className="text-5xl sm:text-6xl font-black text-slate-900 mb-6 tracking-tight">
-            Bulk Image <span className="text-transparent bg-clip-text bg-gradient-to-br from-indigo-600 to-violet-600">Cropping</span>
+        <header className="text-center mb-12">
+          <h1 className="text-5xl sm:text-6xl font-black text-slate-900 mb-6 tracking-tighter">
+            Bulk Image <span className="text-transparent bg-clip-text bg-gradient-to-br from-indigo-600 to-violet-600">Cropper</span>
           </h1>
-          <p className="text-xl text-slate-500 max-w-2xl mx-auto font-medium leading-relaxed">
-            Professional browser-based image tools. No uploads, no servers, just speed.
+          <p className="text-lg text-slate-500 max-w-2xl mx-auto font-medium">
+            The fastest way to crop multiple images for social media, directly in your browser.
           </p>
         </header>
 
         {images.length === 0 ? (
-          <div className="max-w-2xl mx-auto scale-105 transform transition-all">
+          <div className="max-w-2xl mx-auto">
             <Dropzone onFilesAdded={handleFilesAdded} />
-            <div className="mt-12 grid grid-cols-3 gap-8 opacity-40 grayscale pointer-events-none">
-              <div className="h-32 bg-slate-200 rounded-2xl animate-pulse"></div>
-              <div className="h-32 bg-slate-200 rounded-2xl animate-pulse delay-75"></div>
-              <div className="h-32 bg-slate-200 rounded-2xl animate-pulse delay-150"></div>
+            <div className="mt-12 flex justify-center gap-12 opacity-30 grayscale">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-12 h-12 bg-slate-200 rounded-full"></div>
+                <div className="w-16 h-2 bg-slate-200 rounded"></div>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-12 h-12 bg-slate-200 rounded-full"></div>
+                <div className="w-16 h-2 bg-slate-200 rounded"></div>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-12 h-12 bg-slate-200 rounded-full"></div>
+                <div className="w-16 h-2 bg-slate-200 rounded"></div>
+              </div>
             </div>
           </div>
         ) : (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-white p-5 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-200/60 flex flex-col sm:flex-row gap-4 items-center justify-between">
-              <div className="flex items-center gap-6 pl-2">
-                <div>
-                  <p className="text-sm font-bold text-slate-800 leading-none mb-1">
-                    {images.length} Images
-                  </p>
-                  <p className="text-xs text-slate-400 font-medium italic">Ready for processing</p>
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Global Toolbar */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col lg:flex-row gap-6 items-center justify-between">
+              <div className="flex items-center gap-4 w-full lg:w-auto">
+                <div className="p-2 bg-slate-50 rounded-lg text-slate-400">
+                  <Settings2 size={20} />
                 </div>
-                <div className="h-8 w-[1px] bg-slate-200 hidden sm:block"></div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Global Aspect Ratio</span>
+                  <div className="flex gap-1 mt-1">
+                    {[
+                      { label: '1:1', value: 1, icon: <Square size={14} /> },
+                      { label: '16:9', value: 16/9, icon: <RectangleHorizontal size={14} /> },
+                      { label: '9:16', value: 9/16, icon: <RectangleVertical size={14} /> },
+                      { label: 'Free', value: undefined, icon: <Layers size={14} /> },
+                    ].map((opt) => (
+                      <button
+                        key={opt.label}
+                        onClick={() => setGlobalAspect(opt.value)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${globalAspect === opt.value ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                      >
+                        {opt.icon} {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 w-full lg:w-auto border-t lg:border-t-0 pt-4 lg:pt-0">
                 <button
-                  className="flex items-center gap-2 text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-xl text-sm font-bold transition-all active:scale-95"
+                  onClick={handleClearAll}
+                  className="flex-1 lg:flex-none px-4 py-2.5 text-slate-400 hover:text-red-600 transition-colors font-bold text-sm flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={18} />
+                  Clear
+                </button>
+                <button
                   onClick={() => {
                     const input = document.createElement('input');
                     input.type = 'file';
@@ -169,32 +204,24 @@ const App: React.FC = () => {
                     input.onchange = (ev: any) => handleFilesAdded(Array.from(ev.target.files));
                     input.click();
                   }}
+                  className="flex-1 lg:flex-none px-4 py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
                 >
                   <Plus size={18} />
-                  Add More
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <button
-                  onClick={handleClearAll}
-                  className="flex-1 sm:flex-none px-5 py-2.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
-                >
-                  <Trash2 size={18} />
-                  Reset
+                  Add Images
                 </button>
                 <button
                   onClick={handleDownloadAll}
                   disabled={isProcessingAll}
-                  className="flex-1 sm:flex-none px-8 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 rounded-xl font-bold transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 active:scale-95"
+                  className="flex-[2] lg:flex-none px-8 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 rounded-xl font-bold text-sm transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 active:scale-95"
                 >
                   <Download size={18} className={isProcessingAll ? "animate-bounce" : ""} />
-                  {isProcessingAll ? "Downloading..." : "Download All"}
+                  {isProcessingAll ? "Processing..." : `Download ${images.length} Images`}
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            {/* Image Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {images.map((img) => (
                 <ImageCard
                   key={img.id}
@@ -214,17 +241,20 @@ const App: React.FC = () => {
           isOpen={!!editingImageId}
           imageSrc={editingImage.previewUrl}
           imageName={editingImage.name}
+          initialAspect={globalAspect}
           onClose={() => setEditingImageId(null)}
           onSave={handleSaveCrop}
         />
       )}
 
-      <footer className="fixed bottom-0 left-0 right-0 bg-white/60 backdrop-blur-xl border-t border-slate-100 py-3 px-6 flex justify-between items-center text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest">
+      <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-200 py-3 px-6 flex justify-between items-center text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest">
         <span>&copy; {new Date().getFullYear()} InstaCrop Bulk</span>
-        <span className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-          Local Processing Active
-        </span>
+        <div className="flex gap-4">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+            Private Mode
+          </span>
+        </div>
       </footer>
     </div>
   );
