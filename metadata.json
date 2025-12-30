@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop",
-  "description": "A high-performance, modern bulk image cropping tool with real-time previews and intuitive drag-and-drop workflow.",
+  "description": "כלי חיתוך תמונות קבוצתי מתקדם עם תמיכה בהרחבת קנבס, רקעים מטושטשים והעלאה מהירה.",
   "requestFramePermissions": []
 }
