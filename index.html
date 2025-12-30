@@ -24,41 +24,39 @@
     }
     
     .animate-in { animation: fadeIn 0.2s ease-out forwards; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* CRITICAL CROP TOOL OVERRIDES */
+    /* PRO CROP OVERRIDES - Focus on thin lines and small handles */
     .ReactCrop { 
       z-index: 100 !important; 
-      display: inline-block !important;
       max-width: 100%;
       max-height: 100%;
     }
     .ReactCrop__crop-selection { 
       z-index: 110 !important;
-      border: 1.5px solid white !important;
-      outline: 1.5px solid var(--primary) !important;
-      box-shadow: 0 0 0 9999em rgba(0, 0, 0, 0.7) !important;
+      border: 1px solid rgba(255,255,255,0.8) !important;
+      outline: 1px solid var(--primary) !important;
+      box-shadow: 0 0 0 9999em rgba(0, 0, 0, 0.8) !important;
     }
     .ReactCrop__drag-handle { 
       z-index: 120 !important;
       background-color: var(--primary) !important;
-      width: 10px !important;
-      height: 10px !important;
-      border: 1.5px solid white !important;
-      border-radius: 3px;
+      width: 8px !important;
+      height: 8px !important;
+      border-radius: 2px;
     }
 
-    /* Editor Viewport Constraints */
+    /* THE STAGE: Maximum Focus on Image */
     .editor-viewport {
       flex: 1;
       min-height: 0;
       position: relative;
-      background: #020617;
+      background: #020617; /* Dark background for focus */
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      padding: 1rem;
+      padding: 0.5rem;
     }
 
     .workspace-container {
@@ -72,23 +70,20 @@
 
     .blur-background-layer {
       position: absolute;
-      inset: -30px;
-      width: calc(100% + 60px);
-      height: calc(100% + 60px);
-      filter: blur(40px) brightness(0.4);
+      inset: -20px;
+      width: calc(100% + 40px);
+      height: calc(100% + 40px);
+      filter: blur(30px) brightness(0.3);
       object-fit: cover;
       z-index: 0;
-      opacity: 0.6;
+      opacity: 0.5;
       pointer-events: none;
     }
 
-    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
 
-    .card-shadow { box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    
     .crop-target-img {
       display: block;
       max-width: 100%;
@@ -96,18 +91,26 @@
       width: auto;
       height: auto;
       object-fit: contain;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     }
 
-    /* Smaller compact controls */
-    .btn-pro {
-      transition: all 0.2s;
+    /* Small Compact Controls */
+    .compact-btn {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.75rem;
       font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      border-radius: 0.75rem;
+      border-radius: 0.5rem;
+      transition: all 0.2s;
     }
-    .btn-pro:active { transform: scale(0.96); }
+    .compact-btn:active { transform: scale(0.95); }
+    
+    .sidebar-label {
+      font-size: 0.65rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94a3b8;
+    }
   </style>
   <script type="importmap">
 {
@@ -276,18 +279,18 @@
           onDragLeave={() => setIsDragging(false)}
           onDrop={e => { e.preventDefault(); setIsDragging(false); handleFiles(e.dataTransfer.files); }}
         >
-          {/* Main Header */}
-          <header className="h-14 md:h-16 bg-white border-b border-slate-200 px-6 md:px-10 flex items-center justify-between shrink-0 z-30 shadow-sm">
+          {/* Dashboard Header */}
+          <header className="h-14 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 z-30 shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-md">
+              <div className="bg-indigo-600 p-1.5 rounded-lg text-white">
                 <Scissors size={18} />
               </div>
-              <h1 className="text-lg font-bold text-slate-900 tracking-tight">Bulk Crop</h1>
+              <h1 className="text-md font-bold text-slate-900 tracking-tight">Bulk Crop</h1>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {images.length > 0 && (
-                <div className="hidden sm:flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
                   {['image/jpeg', 'image/png'].map(f => (
                     <button 
                       key={f}
@@ -302,39 +305,37 @@
               {images.length > 0 && (
                 <button 
                   onClick={() => setEditingIndex(0)} 
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs flex items-center gap-2 transition-all shadow-md active:scale-95"
                 >
-                  <Crop size={16} /> התחל חיתוך
+                  <Crop size={14} /> ערוך עכשיו
                 </button>
               )}
             </div>
           </header>
 
-          {/* Main Workspace */}
-          <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-8 custom-scrollbar">
+          {/* Main List Workspace */}
+          <main className="flex-1 overflow-y-auto bg-slate-50 p-6 custom-scrollbar">
             {images.length === 0 ? (
               <div 
-                className={`h-full border-4 border-dashed rounded-[2.5rem] flex flex-col items-center justify-center transition-all cursor-pointer group ${isDragging ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white shadow-inner'}`}
+                className={`h-full border-2 border-dashed rounded-[2rem] flex flex-col items-center justify-center transition-all cursor-pointer group ${isDragging ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'}`}
                 onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.onchange=e=>handleFiles(e.target.files); i.click(); }}
               >
-                <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                  <Upload size={36} />
-                </div>
-                <h2 className="text-2xl font-black text-slate-800">העלה תמונות</h2>
-                <p className="text-slate-400 mt-2 text-md font-medium text-center">גרור קבצים או הדבק (Ctrl+V)</p>
+                <Upload size={40} className="text-indigo-600 mb-4 group-hover:scale-110 transition-transform" />
+                <h2 className="text-xl font-bold text-slate-800">התחל לעבוד</h2>
+                <p className="text-slate-400 mt-1 text-sm font-medium">גרור קבצים או הדבק (Ctrl+V)</p>
               </div>
             ) : (
               <div className="max-w-6xl mx-auto space-y-6 animate-in">
-                <div className="flex items-center justify-between gap-4 bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                <div className="flex items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
                   <div>
-                    <h3 className="text-xl font-bold text-slate-800">תמונות בטיפול</h3>
-                    <p className="text-slate-400 text-xs font-medium">{images.length} פריטים</p>
+                    <h3 className="text-lg font-bold text-slate-800">רשימת תמונות</h3>
+                    <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wider">{images.length} פריטים נבחרו</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setImages([])} className="px-4 py-2 text-slate-400 font-bold text-xs hover:text-red-500 flex items-center gap-2"><Trash size={14}/> נקה</button>
-                    <button onClick={exportToPDF} disabled={isExporting} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center gap-2 disabled:opacity-50"><FileText size={16} /> PDF</button>
+                    <button onClick={() => setImages([])} className="px-3 py-2 text-slate-400 font-bold text-xs hover:text-red-500 flex items-center gap-1.5"><Trash size={14}/> נקה</button>
+                    <button onClick={exportToPDF} disabled={isExporting} className="px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center gap-1.5 hover:bg-slate-50 disabled:opacity-50"><FileText size={14} /> PDF</button>
                     <button onClick={downloadAll} className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs shadow-lg hover:bg-black transition-all flex items-center gap-2">
-                      <Download size={16} /> הורד הכל
+                      <Download size={14} /> הורד הכל
                     </button>
                   </div>
                 </div>
@@ -343,95 +344,94 @@
                   {images.map((img, idx) => (
                     <div 
                       key={img.id} 
-                      className="group relative bg-white rounded-2xl p-2 border border-slate-100 card-shadow transition-all hover:-translate-y-1 cursor-pointer"
+                      className="group relative bg-white rounded-xl p-1.5 border border-slate-100 shadow-sm transition-all hover:border-indigo-200 cursor-pointer"
                       onClick={() => setEditingIndex(idx)}
                     >
-                      <div className="aspect-square relative rounded-xl overflow-hidden bg-slate-100">
+                      <div className="aspect-square relative rounded-lg overflow-hidden bg-slate-50">
                         <img src={img.cropped || img.url} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                         {img.cropped && (
-                          <div className="absolute top-1.5 right-1.5 bg-emerald-500 text-white p-1 rounded-full shadow-md animate-in">
-                            <Check size={10} strokeWidth={4} />
+                          <div className="absolute top-1 right-1 bg-emerald-500 text-white p-1 rounded-full shadow-md animate-in">
+                            <Check size={8} strokeWidth={4} />
                           </div>
                         )}
                         <button 
                           onClick={(e) => { e.stopPropagation(); setImages(prev => prev.filter(i => i.id !== img.id)); }}
-                          className="absolute bottom-1.5 left-1.5 p-1.5 bg-white/90 text-slate-400 rounded-lg opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all shadow-sm"
+                          className="absolute bottom-1 left-1 p-1 bg-white/90 text-slate-400 rounded-md opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={12} />
                         </button>
                       </div>
-                      <p className="text-[10px] font-bold text-slate-400 mt-2 truncate px-1 uppercase tracking-tight">{img.name}</p>
+                      <p className="text-[9px] font-bold text-slate-400 mt-2 truncate px-1 uppercase">{img.name}</p>
                     </div>
                   ))}
                   <button 
                     onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.onchange=e=>handleFiles(e.target.files); i.click(); }}
-                    className="aspect-square border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 text-slate-300 hover:border-indigo-300 hover:text-indigo-400 transition-all"
+                    className="aspect-square border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 text-slate-300 hover:border-indigo-300 hover:text-indigo-400 transition-all bg-white"
                   >
-                    <Plus size={24} />
-                    <span className="text-[10px] font-black uppercase">הוסף</span>
+                    <Plus size={20} />
+                    <span className="text-[9px] font-black uppercase">הוסף</span>
                   </button>
                 </div>
               </div>
             )}
           </main>
 
-          {/* Compact Editor Modal */}
+          {/* ULTRA-COMPACT FOCUSED EDITOR MODAL */}
           {editingIndex !== null && (
-            <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 animate-in">
-              <div className="bg-white w-full h-full max-w-6xl flex flex-col md:rounded-[1.5rem] overflow-hidden shadow-2xl">
+            <div className="fixed inset-0 z-[100] bg-slate-950 flex items-center justify-center animate-in">
+              <div className="w-full h-full flex flex-col">
                 
-                {/* Slim Header */}
-                <header className="h-12 md:h-14 px-6 border-b flex justify-between items-center bg-white z-20 shrink-0">
+                {/* Thin Header */}
+                <header className="h-10 px-4 flex justify-between items-center bg-slate-900 border-b border-slate-800 shrink-0">
                   <div className="flex items-center gap-3">
-                    <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-black text-[10px]">{editingIndex + 1} / {images.length}</span>
-                    <h3 className="text-sm font-bold text-slate-800 truncate max-w-[150px] md:max-w-xs">{images[editingIndex].name}</h3>
+                    <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded text-[9px] font-bold">{editingIndex + 1} / {images.length}</span>
+                    <h3 className="text-xs font-medium text-slate-300 truncate max-w-[200px]">{images[editingIndex].name}</h3>
                   </div>
-                  <button onClick={() => setEditingIndex(null)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-all">
-                    <X size={20} />
+                  <button onClick={() => setEditingIndex(null)} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 transition-all">
+                    <X size={16} />
                   </button>
                 </header>
 
-                <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+                <div className="flex-1 flex overflow-hidden relative">
                   
-                  {/* Compact Configuration Sidebar */}
-                  <aside className="w-full md:w-64 bg-slate-50 border-l p-5 space-y-6 overflow-y-auto no-scrollbar shrink-0 order-2 md:order-1">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-2">
-                          <Layers size={14} className="text-indigo-600" /> הרחבת קנבס
-                        </label>
-                        <input 
-                          type="checkbox" 
-                          checked={expandCanvas} 
-                          onChange={e => setExpandCanvas(e.target.checked)} 
-                          className="w-4 h-4 rounded-md accent-indigo-600 cursor-pointer" 
-                        />
-                      </div>
-                    </div>
-
-                    {expandCanvas && (
-                      <div className="space-y-3 pt-4 border-t border-slate-200 animate-in">
-                        <div className="grid grid-cols-1 gap-1.5">
-                          {[
-                            {id: 'blur', icon: Sparkles, label: 'טשטוש'},
-                            {id: 'color', icon: Palette, label: 'צבע אחיד'}
-                          ].map(opt => (
-                            <button 
-                              key={opt.id}
-                              onClick={() => setBgType(opt.id)} 
-                              className={`p-3 rounded-xl border flex items-center gap-2 text-[11px] font-bold transition-all ${bgType === opt.id ? 'border-indigo-600 bg-white text-indigo-700 shadow-sm' : 'border-slate-200 bg-white text-slate-400 hover:border-slate-300'}`}
-                            >
-                              <opt.icon size={14} /> {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                        {bgType === 'color' && <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-full h-8 p-0 rounded-lg bg-white border border-slate-200 cursor-pointer" />}
-                      </div>
-                    )}
+                  {/* Slim Controls Sidebar */}
+                  <aside className="w-12 md:w-48 bg-slate-900 border-l border-slate-800 p-4 space-y-6 overflow-y-auto no-scrollbar shrink-0 order-2 md:order-1">
                     
-                    <div className="pt-4 border-t border-slate-200">
-                       <label className="text-[10px] font-black uppercase text-slate-500 mb-3 block flex items-center gap-2"><Settings2 size={14} className="text-indigo-600" /> יחס גובה-רוחב</label>
-                       <div className="grid grid-cols-2 gap-1.5">
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="sidebar-label flex items-center gap-2"><Layers size={10} /> קנבס</label>
+                          <input 
+                            type="checkbox" 
+                            checked={expandCanvas} 
+                            onChange={e => setExpandCanvas(e.target.checked)} 
+                            className="w-3.5 h-3.5 rounded accent-indigo-500 cursor-pointer" 
+                          />
+                        </div>
+                        {expandCanvas && (
+                          <div className="space-y-2 animate-in">
+                            <div className="flex flex-col gap-1">
+                              {[
+                                {id: 'blur', label: 'טשטוש'},
+                                {id: 'color', label: 'צבע'}
+                              ].map(opt => (
+                                <button 
+                                  key={opt.id}
+                                  onClick={() => setBgType(opt.id)} 
+                                  className={`text-[10px] py-1.5 px-2 rounded font-bold text-right transition-all ${bgType === opt.id ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                            {bgType === 'color' && <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-full h-6 p-0 bg-transparent border-0 cursor-pointer" />}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-800">
+                        <label className="sidebar-label mb-3 block flex items-center gap-2"><Settings2 size={10} /> יחס חיתוך</label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
                           {[
                             {l: '1:1', v: 1}, {l: '16:9', v: 16/9}, 
                             {l: '9:16', v: 9/16}, {l: 'חופשי', v: undefined}
@@ -439,16 +439,17 @@
                             <button 
                               key={v.l} 
                               onClick={() => { setAspect(v.v); onImageLoad({ currentTarget: imgRef.current }); }} 
-                              className={`py-2 rounded-lg text-[10px] font-bold transition-all border ${aspect === v.v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+                              className={`py-1 rounded text-[9px] font-bold border transition-all ${aspect === v.v ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-600'}`}
                             >
                               {v.l}
                             </button>
                           ))}
-                       </div>
+                        </div>
+                      </div>
                     </div>
                   </aside>
 
-                  {/* Focused Editor Viewport */}
+                  {/* FOCUSED WORKSPACE - TAKES ALL REMAINING SPACE */}
                   <section className="editor-viewport order-1 md:order-2">
                     <div className="workspace-container">
                       <ReactCrop 
@@ -459,7 +460,7 @@
                       >
                         <div 
                           ref={workspaceRef}
-                          className={`relative flex items-center justify-center transition-all duration-300 overflow-hidden ${expandCanvas ? 'p-6 md:p-12' : ''}`}
+                          className={`relative flex items-center justify-center transition-all overflow-hidden ${expandCanvas ? 'p-10 md:p-20' : ''}`}
                           style={{ 
                             background: expandCanvas && bgType === 'color' ? bgColor : 'transparent',
                             maxWidth: '100%',
@@ -471,7 +472,7 @@
                             ref={imgRef} 
                             src={images[editingIndex].url} 
                             onLoad={onImageLoad}
-                            className="crop-target-img relative z-10 shadow-lg border border-white/10"
+                            className="crop-target-img relative z-10"
                           />
                         </div>
                       </ReactCrop>
@@ -479,20 +480,23 @@
                   </section>
                 </div>
 
-                {/* Slim Navigation Footer */}
-                <footer className="h-16 md:h-20 bg-white border-t px-8 flex items-center justify-between shrink-0 z-20">
+                {/* Compact Footer Bar */}
+                <footer className="h-14 px-6 flex items-center justify-between bg-slate-900 border-t border-slate-800 shrink-0 z-20">
                   <button 
                     onClick={() => editingIndex > 0 && setEditingIndex(editingIndex - 1)} 
                     disabled={editingIndex === 0}
-                    className="px-5 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-slate-200 disabled:opacity-30 transition-all"
+                    className="compact-btn bg-slate-800 text-slate-400 hover:bg-slate-700 disabled:opacity-20 flex items-center gap-1"
                   >
-                    <ChevronRight size={16} /> קודם
+                    <ChevronRight size={14} /> קודם
                   </button>
+                  
+                  <div className="hidden sm:block text-[9px] font-bold text-slate-600 uppercase tracking-widest">Crop Mode Active</div>
+
                   <button 
                     onClick={handleNext} 
-                    className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs shadow-md flex items-center gap-2 hover:bg-indigo-700 transition-all"
+                    className="compact-btn bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1 shadow-lg"
                   >
-                    {editingIndex === images.length - 1 ? 'סיים ושמור' : 'הבא'} <ChevronLeft size={16} />
+                    {editingIndex === images.length - 1 ? 'שמור וסיים' : 'הבא'} <ChevronLeft size={14} />
                   </button>
                 </footer>
 
