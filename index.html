@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v2.1.0</title>
+  <title>Bulk Crop Pro | v2.5.0</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,7 +16,7 @@
     
     body.editor-open { overflow: hidden; height: 100vh; position: fixed; width: 100%; }
 
-    /* Force LTR for the Crop component to fix RTL coordinate bugs */
+    /* Force LTR for the Crop component to fix RTL coordinate mapping bugs */
     .ltr-force { direction: ltr !important; }
     
     .ReactCrop { direction: ltr !important; touch-action: none; }
@@ -81,8 +81,6 @@
     .aspect-btn.active { background: var(--primary); border-color: var(--primary); transform: scale(1.05); }
 
     .img-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-    .img-card.pending img { filter: grayscale(1); opacity: 0.5; }
-    
     .status-check {
       position: absolute;
       top: 8px;
@@ -120,27 +118,27 @@
     import { createRoot } from 'react-dom/client';
     import { 
       Upload, Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, 
-      Copy, ImageIcon, RefreshCw, ZoomIn, ZoomOut, Loader2, Trash2, Palette, Maximize
+      Copy, ImageIcon, RefreshCw, ZoomIn, ZoomOut, Loader2, Trash2, Palette
     } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 
     const App = () => {
       const [images, setImages] = useState([]);
       const [editingIdx, setEditingIdx] = useState(null);
-      const [crop, setCrop] = useState();
+      const [crop, setCrop] = useState(); // Percent unit
       const [aspect, setAspect] = useState(undefined);
       const [bgColor, setBgColor] = useState('#ffffff');
       const [isProcessing, setIsProcessing] = useState(false);
       const [zoom, setZoom] = useState(1);
       const imgRef = useRef(null);
+      const fileInputRef = useRef(null);
 
       const handleAddImages = useCallback((files) => {
         const newImgs = Array.from(files).filter(f => f.type.startsWith('image/')).map(f => ({
           id: Math.random().toString(36).substr(2, 9),
           url: URL.createObjectURL(f),
           name: f.name,
-          cropped: null,
-          config: null
+          cropped: null
         }));
         setImages(prev => [...prev, ...newImgs]);
       }, []);
@@ -157,46 +155,72 @@
       }, [editingIdx]);
 
       const onImageLoad = (e) => {
-        const { width, height, naturalWidth, naturalHeight } = e.currentTarget;
+        const { width, height } = e.currentTarget;
         imgRef.current = e.currentTarget;
         
-        // Default to image's natural aspect if none selected
-        const initialAspect = aspect || (naturalWidth / naturalHeight);
-        setCrop(centerCrop(makeAspectCrop({ unit: '%', width: 90 }, initialAspect, width, height), width, height));
+        // Default 90% centered crop based on current aspect
+        const initialCrop = centerCrop(
+          makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height),
+          width,
+          height
+        );
+        setCrop(initialCrop);
       };
 
-      const generateCroppedBlob = async (imageSrc, cropData, currentBg) => {
+      const handleAspectChange = (newVal) => {
+        setAspect(newVal);
+        if (imgRef.current) {
+          const { width, height } = imgRef.current;
+          const newCrop = centerCrop(
+            makeAspectCrop({ unit: '%', width: 90 }, newVal, width, height),
+            width,
+            height
+          );
+          setCrop(newCrop);
+        }
+      };
+
+      /**
+       * Precision-focused crop generation.
+       * Maps percentage coordinates from the visual UI to absolute pixels of the original image file.
+       */
+      const generateCroppedBlob = async (imageSrc, percentCrop, currentBg) => {
+        if (!percentCrop || !percentCrop.width || !percentCrop.height) return null;
+
         return new Promise((resolve) => {
           const tempImg = new Image();
+          tempImg.crossOrigin = "anonymous";
           tempImg.onload = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            // Calculate absolute pixel values based on natural size
+            // Absolute pixels from Natural (Source) dimensions
             const nw = tempImg.naturalWidth;
             const nh = tempImg.naturalHeight;
 
-            // Crop percentages to absolute pixels
-            const pixelX = (cropData.x * nw) / 100;
-            const pixelY = (cropData.y * nh) / 100;
-            const pixelW = (cropData.width * nw) / 100;
-            const pixelH = (cropData.height * nh) / 100;
+            const pixelX = (percentCrop.x * nw) / 100;
+            const pixelY = (percentCrop.y * nh) / 100;
+            const pixelW = (percentCrop.width * nw) / 100;
+            const pixelH = (percentCrop.height * nh) / 100;
 
-            canvas.width = pixelW;
-            canvas.height = pixelH;
+            canvas.width = Math.round(pixelW);
+            canvas.height = Math.round(pixelH);
 
-            // Fill background
-            ctx.fillStyle = currentBg;
+            // Fill background (for expansions or transparency support)
+            ctx.fillStyle = currentBg || '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
 
-            // Draw the cropped portion
-            ctx.drawImage(tempImg, pixelX, pixelY, pixelW, pixelH, 0, 0, pixelW, pixelH);
+            ctx.drawImage(
+              tempImg, 
+              pixelX, pixelY, pixelW, pixelH, // Source selection
+              0, 0, canvas.width, canvas.height // Canvas mapping
+            );
 
             canvas.toBlob((blob) => {
-              resolve(URL.createObjectURL(blob));
+              resolve(blob ? URL.createObjectURL(blob) : null);
             }, 'image/jpeg', 0.95);
           };
           tempImg.src = imageSrc;
@@ -204,13 +228,15 @@
       };
 
       const handleOk = async () => {
-        if (!imgRef.current || !crop) return;
+        if (!imgRef.current || !crop || editingIdx === null) return;
         setIsProcessing(true);
         const croppedUrl = await generateCroppedBlob(images[editingIdx].url, crop, bgColor);
         
-        setImages(prev => prev.map((img, i) => 
-          i === editingIdx ? { ...img, cropped: croppedUrl, config: { crop, aspect, bgColor } } : img
-        ));
+        if (croppedUrl) {
+          setImages(prev => prev.map((img, i) => 
+            i === editingIdx ? { ...img, cropped: croppedUrl } : img
+          ));
+        }
         
         setIsProcessing(false);
         setEditingIdx(null);
@@ -221,12 +247,11 @@
         setIsProcessing(true);
         
         const currentCrop = { ...crop };
-        const currentAspect = aspect;
         const currentBg = bgColor;
 
         const updatedImages = await Promise.all(images.map(async (img) => {
           const newUrl = await generateCroppedBlob(img.url, currentCrop, currentBg);
-          return { ...img, cropped: newUrl, config: { crop: currentCrop, aspect: currentAspect, bgColor: currentBg } };
+          return { ...img, cropped: newUrl };
         }));
 
         setImages(updatedImages);
@@ -241,7 +266,7 @@
           link.href = img.cropped;
           link.download = `CROP_${img.name.split('.')[0]}.jpg`;
           link.click();
-          await new Promise(r => setTimeout(r, 400));
+          await new Promise(r => setTimeout(r, 450));
         }
       };
 
@@ -254,7 +279,7 @@
               </div>
               <div>
                 <h1 className="text-xl font-black text-slate-900 leading-none">Bulk Crop Pro</h1>
-                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">v2.1.0 High-Res Engine</p>
+                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">v2.5.0 High-Res Engine</p>
               </div>
             </div>
             <div className="flex gap-3">
@@ -333,7 +358,7 @@
                   <button 
                     onClick={handleApplyAll} 
                     disabled={isProcessing}
-                    className="flex items-center gap-2 text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-xl text-xs font-black uppercase hover:bg-indigo-500/20 transition-all border border-indigo-500/20 disabled:opacity-50"
+                    className="flex items-center gap-2 text-indigo-400 bg-indigo-500/10 px-4 py-2 rounded-xl text-xs font-black uppercase hover:bg-indigo-50/10 transition-all border border-indigo-500/20 disabled:opacity-50 active:scale-95"
                   >
                     {isProcessing ? <Loader2 className="animate-spin" size={14}/> : <Copy size={14}/>}
                     החל על כולם
@@ -351,6 +376,7 @@
                     onChange={c => setCrop(c)} 
                     aspect={aspect}
                     keepSelection
+                    unit="%"
                   >
                     <img 
                       ref={imgRef} 
@@ -370,7 +396,13 @@
                     { label: '16:9', val: 16/9 },
                     { label: '9:16', val: 9/16 }
                    ].map(a => (
-                     <button key={a.label} onClick={() => setAspect(a.val)} className={`aspect-btn ${aspect === a.val ? 'active' : ''}`}>{a.label}</button>
+                     <button 
+                        key={a.label} 
+                        onClick={() => handleAspectChange(a.val)} 
+                        className={`aspect-btn ${aspect === a.val ? 'active' : ''}`}
+                     >
+                        {a.label}
+                     </button>
                    ))}
                 </div>
 
@@ -420,7 +452,7 @@
           )}
           
           <footer className="py-12 text-center bg-white border-t border-slate-100">
-            <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em]">Bulk Crop Pro • High-Precision Processing</p>
+            <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em]">Bulk Crop Pro • High-Precision Engine</p>
           </footer>
         </div>
       );
