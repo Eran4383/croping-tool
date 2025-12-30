@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v2.5.0</title>
+  <title>Bulk Crop Pro | v2.5.1</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -181,8 +181,8 @@
       };
 
       /**
-       * Precision-focused crop generation.
-       * Maps percentage coordinates from the visual UI to absolute pixels of the original image file.
+       * Fixed High-Resolution Saving Engine
+       * Maps percentage UI crop to absolute pixels on the original file
        */
       const generateCroppedBlob = async (imageSrc, percentCrop, currentBg) => {
         if (!percentCrop || !percentCrop.width || !percentCrop.height) return null;
@@ -194,29 +194,33 @@
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            // Absolute pixels from Natural (Source) dimensions
+            // Source dimensions (Natural resolution)
             const nw = tempImg.naturalWidth;
             const nh = tempImg.naturalHeight;
 
+            // Map UI percentages to actual source pixels
             const pixelX = (percentCrop.x * nw) / 100;
             const pixelY = (percentCrop.y * nh) / 100;
             const pixelW = (percentCrop.width * nw) / 100;
             const pixelH = (percentCrop.height * nh) / 100;
 
-            canvas.width = Math.round(pixelW);
-            canvas.height = Math.round(pixelH);
+            // Round dimensions to avoid rendering artifacts or stretched canvases
+            canvas.width = Math.max(1, Math.round(pixelW));
+            canvas.height = Math.max(1, Math.round(pixelH));
 
-            // Fill background (for expansions or transparency support)
+            // Background
             ctx.fillStyle = currentBg || '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // High quality scaling
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
 
+            // Draw exactly the selected region from source to destination
             ctx.drawImage(
               tempImg, 
               pixelX, pixelY, pixelW, pixelH, // Source selection
-              0, 0, canvas.width, canvas.height // Canvas mapping
+              0, 0, canvas.width, canvas.height // Canvas surface
             );
 
             canvas.toBlob((blob) => {
@@ -279,7 +283,7 @@
               </div>
               <div>
                 <h1 className="text-xl font-black text-slate-900 leading-none">Bulk Crop Pro</h1>
-                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">v2.5.0 High-Res Engine</p>
+                <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">v2.5.1 Precision Engine</p>
               </div>
             </div>
             <div className="flex gap-3">
