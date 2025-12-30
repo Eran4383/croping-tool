@@ -4,29 +4,312 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BulkCrop - Professional Image Cropper</title>
+  
+  <!-- UI Framework -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Browser-side Transpiler -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
   <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: #f8fafc;
+    body { 
+      font-family: 'Plus Jakarta Sans', sans-serif; 
+      background-color: #f8fafc; 
+      color: #0f172a;
     }
+    .cropper-container { 
+      position: relative; 
+      width: 100%; 
+      height: 100%; 
+      background: #000; 
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .animate-in {
+      animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
   </style>
-<script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "react-easy-crop": "https://esm.sh/react-easy-crop@^5.5.6"
+
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@19",
+      "react-dom": "https://esm.sh/react-dom@19",
+      "react-dom/client": "https://esm.sh/react-dom@19/client",
+      "lucide-react": "https://esm.sh/lucide-react@0.460.0",
+      "react-easy-crop": "https://esm.sh/react-easy-crop@5.2.0"
+    }
   }
-}
-</script>
+  </script>
 </head>
 <body>
   <div id="root"></div>
+
+  <script type="text/babel" data-type="module" data-presets="react,typescript">
+    import React, { useState, useCallback, useEffect, useRef } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { 
+      Upload, Image as ImageIcon, ClipboardPaste, Crop, 
+      Download, Trash2, CheckCircle2, X, Check, Square, 
+      RectangleHorizontal, RectangleVertical, Move, ZoomIn, 
+      Layers, Github, Plus, RefreshCcw, Scissors
+    } from 'lucide-react';
+    import Cropper from 'react-easy-crop';
+
+    // --- UTILITIES ---
+    const createImage = (url) =>
+      new Promise((resolve, reject) => {
+        const image = new Image();
+        image.addEventListener('load', () => resolve(image));
+        image.addEventListener('error', (error) => reject(error));
+        image.setAttribute('crossOrigin', 'anonymous');
+        image.src = url;
+      });
+
+    const getCroppedImg = async (imageSrc, pixelCrop) => {
+      const image = await createImage(imageSrc);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return '';
+
+      canvas.width = pixelCrop.width;
+      canvas.height = pixelCrop.height;
+
+      ctx.drawImage(
+        image,
+        pixelCrop.x,
+        pixelCrop.y,
+        pixelCrop.width,
+        pixelCrop.height,
+        0,
+        0,
+        pixelCrop.width,
+        pixelCrop.height
+      );
+
+      return new Promise((resolve) => {
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          resolve(URL.createObjectURL(blob));
+        }, 'image/jpeg', 0.95);
+      });
+    };
+
+    // --- COMPONENTS ---
+    const Dropzone = ({ onFilesAdded }) => {
+      const fileInputRef = useRef(null);
+      return (
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); onFilesAdded(Array.from(e.dataTransfer.files)); }}
+          onClick={() => fileInputRef.current?.click()}
+          className="group relative border-2 border-dashed border-slate-200 rounded-[2rem] p-16 sm:p-24 transition-all hover:border-indigo-500 hover:bg-indigo-50/30 cursor-pointer flex flex-col items-center justify-center gap-6 bg-white shadow-sm hover:shadow-xl hover:scale-[1.01]"
+        >
+          <input type="file" ref={fileInputRef} onChange={(e) => e.target.files && onFilesAdded(Array.from(e.target.files))} className="hidden" multiple accept="image/*" />
+          <div className="w-24 h-24 bg-indigo-50 rounded-[2rem] flex items-center justify-center transition-all group-hover:scale-110 group-hover:rotate-3 shadow-inner text-indigo-600">
+            <Upload size={40} strokeWidth={2.5} />
+          </div>
+          <div className="text-center">
+            <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight mb-2">Drag images here</h3>
+            <p className="text-slate-500 font-medium text-lg">Batch process images locally. No uploads, no waiting.</p>
+          </div>
+          <div className="flex gap-4 mt-4">
+            <div className="flex gap-2 items-center text-[10px] font-black text-slate-400 bg-slate-100 px-4 py-2 rounded-full uppercase tracking-widest border border-slate-200 shadow-sm">
+              <ClipboardPaste size={14} /> Paste (Ctrl+V)
+            </div>
+            <div className="flex gap-2 items-center text-[10px] font-black text-slate-400 bg-slate-100 px-4 py-2 rounded-full uppercase tracking-widest border border-slate-200 shadow-sm">
+              <ImageIcon size={14} /> PNG, JPG, WebP
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const ImageCard = ({ item, onCrop, onRemove, onDownload }) => (
+      <div className="group bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col transition-all hover:shadow-2xl hover:-translate-y-2">
+        <div className="relative aspect-square bg-slate-50 overflow-hidden">
+          <img src={item.croppedUrl || item.previewUrl} alt={item.name} className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110" />
+          {item.croppedUrl && <div className="absolute top-4 right-4 bg-green-500 text-white p-1.5 rounded-full shadow-lg border-2 border-white animate-in"><Check size={16} strokeWidth={4} /></div>}
+          <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-3 backdrop-blur-[3px]">
+            <button onClick={() => onCrop(item.id)} className="p-3.5 bg-white text-slate-900 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all transform hover:scale-110 shadow-xl" title="Edit Crop"><Crop size={22} /></button>
+            <button onClick={() => onDownload(item)} className="p-3.5 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all transform hover:scale-110 shadow-xl" title="Download"><Download size={22} /></button>
+            <button onClick={() => onRemove(item.id)} className="p-3.5 bg-white text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all transform hover:scale-110 shadow-xl" title="Remove"><Trash2 size={22} /></button>
+          </div>
+        </div>
+        <div className="p-5 border-t border-slate-100 flex items-center justify-between gap-4">
+          <p className="text-[11px] font-black text-slate-500 truncate uppercase tracking-widest leading-none" title={item.name}>{item.name}</p>
+        </div>
+      </div>
+    );
+
+    const CropModal = ({ isOpen, imageSrc, imageName, onClose, onSave }) => {
+      const [crop, setCrop] = useState({ x: 0, y: 0 });
+      const [zoom, setZoom] = useState(1);
+      const [aspect, setAspect] = useState(1);
+      const [pixels, setPixels] = useState(null);
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-4 animate-in">
+          <div className="bg-white w-full max-w-6xl h-[90vh] rounded-[3rem] flex flex-col overflow-hidden shadow-2xl border border-white/20">
+            <div className="px-10 py-8 border-b border-slate-100 flex items-center justify-between bg-white">
+              <div>
+                <h3 className="text-3xl font-black text-slate-900 leading-none tracking-tight">Editor</h3>
+                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] mt-3 bg-indigo-50 inline-block px-3 py-1 rounded-full">{imageName}</p>
+              </div>
+              <button onClick={onClose} className="p-4 hover:bg-slate-100 rounded-full text-slate-400 transition-all active:scale-90"><X size={32} /></button>
+            </div>
+            <div className="flex-1 relative bg-slate-950">
+              <Cropper image={imageSrc} crop={crop} zoom={zoom} aspect={aspect} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_, p) => setPixels(p)} />
+            </div>
+            <div className="p-10 bg-white grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+              <div className="lg:col-span-4">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Ratio Presets</span>
+                <div className="grid grid-cols-4 gap-2 bg-slate-50 p-2 rounded-2xl">
+                  {[1, 1.77, 0.56, 0].map((v, i) => (
+                    <button key={i} onClick={() => setAspect(v || undefined)} className={`py-3.5 rounded-xl text-[10px] font-black transition-all ${aspect === v || (v === 0 && aspect === undefined) ? 'bg-white text-indigo-600 shadow-md scale-[1.02]' : 'text-slate-400 hover:text-slate-600'}`}>
+                      {v === 1 ? '1:1' : v === 1.77 ? '16:9' : v === 0.56 ? '9:16' : 'Free'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="lg:col-span-4">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Zoom & Scale</span>
+                <div className="flex items-center gap-6">
+                  <ZoomIn size={20} className="text-slate-300" />
+                  <input type="range" value={zoom} min={1} max={3} step={0.01} onChange={(e) => setZoom(Number(e.target.value))} className="w-full h-1.5 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600" />
+                  <span className="text-xs font-black text-slate-500 w-10 tabular-nums">{Math.round(zoom * 100)}%</span>
+                </div>
+              </div>
+              <div className="lg:col-span-4 flex gap-4">
+                <button onClick={onClose} className="flex-1 py-5 rounded-2xl font-black text-slate-500 bg-slate-50 hover:bg-slate-100 transition-all">Cancel</button>
+                <button onClick={() => pixels && onSave(pixels)} className="flex-[2] py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-2xl shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95">Save Changes</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // --- MAIN APP ---
+    const App = () => {
+      const [images, setImages] = useState([]);
+      const [editingId, setEditingId] = useState(null);
+
+      const handleFiles = useCallback((files) => {
+        const newImgs = Array.from(files).filter(f => f.type.startsWith('image/')).map(file => ({
+          id: Math.random().toString(36).substr(2, 9),
+          file, previewUrl: URL.createObjectURL(file), name: file.name, croppedUrl: null
+        }));
+        setImages(prev => [...prev, ...newImgs]);
+      }, []);
+
+      useEffect(() => {
+        const paste = (e) => {
+          const files = Array.from(e.clipboardData?.items || []).filter(i => i.type.startsWith('image/')).map(i => i.getAsFile());
+          if (files.length) handleFiles(files);
+        };
+        window.addEventListener('paste', paste);
+        return () => window.removeEventListener('paste', paste);
+      }, [handleFiles]);
+
+      const onSave = async (px) => {
+        const item = images.find(i => i.id === editingId);
+        const croppedUrl = await getCroppedImg(item.previewUrl, px);
+        setImages(prev => prev.map(i => i.id === editingId ? { ...i, croppedUrl } : i));
+        setEditingId(null);
+      };
+
+      const download = (item) => {
+        const a = document.createElement('a'); 
+        a.href = item.croppedUrl || item.previewUrl; 
+        a.download = `crop-${item.name}`; 
+        a.click();
+      };
+
+      const downloadAll = async () => {
+        for (const img of images) { download(img); await new Promise(r => setTimeout(r, 400)); }
+      };
+
+      const editingItem = images.find(i => i.id === editingId);
+
+      return (
+        <div className="min-h-screen">
+          <nav className="h-24 border-b border-slate-100 bg-white/70 backdrop-blur-2xl sticky top-0 z-40 px-8 sm:px-12 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-xl shadow-indigo-100 rotate-3 transition-transform hover:rotate-0">
+                <Scissors size={24} />
+              </div>
+              <span className="text-3xl font-black tracking-tighter text-slate-900">BulkCrop</span>
+            </div>
+            <div className="hidden sm:flex items-center gap-8">
+              <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-5 py-2.5 rounded-full border border-slate-100">
+                <kbd className="bg-white px-2 py-0.5 border rounded shadow-sm text-slate-900 font-bold">CTRL+V</kbd>
+                <span>Quick Paste</span>
+              </div>
+              <a href="https://github.com" className="text-slate-400 hover:text-slate-900 transition-all hover:scale-110"><Github size={28} /></a>
+            </div>
+          </nav>
+          
+          <main className="max-w-7xl mx-auto px-8 pt-20 pb-40">
+            <header className="text-center mb-24">
+              <h1 className="text-6xl sm:text-9xl font-extrabold text-slate-900 tracking-tightest mb-8 leading-[0.9]">CROP <span className="text-indigo-600">FASTER.</span></h1>
+              <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-3xl mx-auto leading-relaxed">The ultimate browser tool for batch cropping images. Your data never leaves your computer.</p>
+            </header>
+
+            {images.length === 0 ? (
+              <div className="max-w-4xl mx-auto"><Dropzone onFilesAdded={handleFiles} /></div>
+            ) : (
+              <div className="space-y-12 animate-in">
+                <div className="bg-white p-8 rounded-[3rem] shadow-2xl shadow-slate-200/50 border border-slate-100 flex flex-col lg:flex-row items-center justify-between gap-8">
+                  <div className="flex items-center gap-10 pl-6">
+                    <div className="text-center lg:text-left">
+                      <p className="text-4xl font-black leading-none text-slate-900">{images.length}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase mt-2 tracking-[0.3em]">Images Loaded</p>
+                    </div>
+                    <div className="h-12 w-[1px] bg-slate-100 hidden sm:block"></div>
+                    <button onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.onchange=(e)=>handleFiles(e.target.files); i.click(); }} className="flex items-center gap-3 text-indigo-600 font-black text-sm px-6 py-3 hover:bg-indigo-50 rounded-2xl transition-all"><Plus size={20} /> Add More</button>
+                  </div>
+                  <div className="flex gap-4 w-full lg:w-auto">
+                    <button onClick={() => setImages([])} className="flex-1 lg:flex-none px-10 py-4 text-slate-500 font-black text-sm hover:text-red-600 transition-colors">Clear All</button>
+                    <button onClick={downloadAll} className="flex-1 lg:flex-none px-12 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-sm shadow-2xl shadow-indigo-100 flex items-center justify-center gap-3 hover:bg-indigo-700 transition-all active:scale-95 group">
+                      <Download size={20} className="group-hover:translate-y-1 transition-transform" /> Download All
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-10">
+                  {images.map(img => <ImageCard key={img.id} item={img} onCrop={setEditingId} onRemove={(id) => setImages(p => p.filter(i => i.id !== id))} onDownload={download} />)}
+                </div>
+              </div>
+            )}
+          </main>
+          
+          <footer className="fixed bottom-0 left-0 right-0 bg-white/60 backdrop-blur-3xl border-t border-slate-100 py-6 px-12 flex justify-between items-center text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 z-30">
+            <span className="flex items-center gap-3"><RefreshCcw size={14} /> Private Local-Only Sync</span>
+            <span>&copy; BulkCrop {new Date().getFullYear()}</span>
+          </footer>
+
+          {editingItem && <CropModal isOpen={!!editingId} imageSrc={editingItem.previewUrl} imageName={editingItem.name} onClose={() => setEditingId(null)} onSave={onSave} />}
+        </div>
+      );
+    };
+
+    createRoot(document.getElementById('root')).render(<App />);
+  </script>
 </body>
 </html>
