@@ -26,7 +26,6 @@
       -webkit-overflow-scrolling: touch;
     }
 
-    /* Lock body scroll ONLY when editor is active to allow pull-to-refresh normally */
     body.editor-active {
       overflow: hidden;
       height: 100vh;
@@ -149,7 +148,7 @@
     } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 
-    const VERSION = "v1.1.6";
+    const VERSION = "v1.1.8";
 
     const App = () => {
       const [images, setImages] = useState([]);
@@ -158,7 +157,6 @@
       const [isDraggingSelection, setIsDraggingSelection] = useState(false);
       
       const [crop, setCrop] = useState();
-      const [pixelCrop, setPixelCrop] = useState();
       const [aspect, setAspect] = useState(undefined);
       const [zoom, setZoom] = useState(1);
       
@@ -200,7 +198,8 @@
 
       const calculateInitialCrop = (img, targetAspect) => {
         if (!img) return;
-        const { naturalWidth: width, naturalHeight: height } = img;
+        const width = img.naturalWidth || img.width;
+        const height = img.naturalHeight || img.height;
         const effectiveAspect = targetAspect !== undefined ? targetAspect : (width / height);
         
         const newCrop = centerCrop(
@@ -245,7 +244,9 @@
         alert('הגדרות החיתוך הוחלו על כל התמונות בהצלחה!');
       };
 
-      const processImage = async (imgData, specificPixelCrop) => {
+      const processImage = async (imgData, cropState) => {
+        if (!cropState || cropState.width === 0 || cropState.height === 0) return null;
+        
         const image = new Image();
         image.src = imgData.url;
         await new Promise(r => image.onload = r);
@@ -253,29 +254,22 @@
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        let targetPixelCrop = specificPixelCrop;
-        
-        if (!targetPixelCrop && imgData.lastCrop) {
-          const c = imgData.lastCrop;
-          targetPixelCrop = {
-            x: (c.x * image.width) / 100,
-            y: (c.y * image.height) / 100,
-            width: (c.width * image.width) / 100,
-            height: (c.height * image.height) / 100
-          };
-        }
+        // Convert percentage to actual pixels relative to natural dimensions
+        const scaleX = image.naturalWidth / 100;
+        const scaleY = image.naturalHeight / 100;
 
-        if (!targetPixelCrop) {
-          targetPixelCrop = { x: 0, y: 0, width: image.width, height: image.height };
-        }
+        const targetX = cropState.x * scaleX;
+        const targetY = cropState.y * scaleY;
+        const targetWidth = cropState.width * scaleX;
+        const targetHeight = cropState.height * scaleY;
 
-        canvas.width = targetPixelCrop.width;
-        canvas.height = targetPixelCrop.height;
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
 
         ctx.drawImage(
           image,
-          targetPixelCrop.x, targetPixelCrop.y, targetPixelCrop.width, targetPixelCrop.height,
-          0, 0, targetPixelCrop.width, targetPixelCrop.height
+          targetX, targetY, targetWidth, targetHeight,
+          0, 0, targetWidth, targetHeight
         );
         
         return new Promise(resolve => {
@@ -284,7 +278,7 @@
       };
 
       const handleSaveCurrent = async () => {
-        const croppedUrl = await processImage(images[editingIndex], pixelCrop);
+        const croppedUrl = await processImage(images[editingIndex], crop);
         setImages(prev => prev.map((img, i) => 
           i === editingIndex ? { ...img, cropped: croppedUrl, lastCrop: crop, lastAspect: aspect } : img
         ));
@@ -296,12 +290,13 @@
       const downloadAll = async () => {
         for (let i = 0; i < images.length; i++) {
           const img = images[i];
-          const finalUrl = img.cropped || await processImage(img, null);
+          const finalUrl = img.cropped || await processImage(img, img.lastCrop);
+          if (!finalUrl) continue;
           const link = document.createElement('a');
           link.href = finalUrl;
           link.download = `bulk-${i+1}-${img.name}`;
           link.click();
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 400));
         }
       };
 
@@ -325,8 +320,8 @@
                 </button>
               )}
               {images.length > 0 && (
-                <button onClick={() => setEditingIndex(0)} className="bg-indigo-600 text-white px-6 py-2 rounded-xl text-xs font-black shadow-xl hover:bg-indigo-700">
-                  ערוך הכל
+                <button onClick={() => setEditingIndex(0)} className="bg-indigo-600 text-white px-6 py-2 rounded-xl text-xs font-black shadow-xl hover:bg-indigo-700 transition-all active:scale-95">
+                  עריכה קבוצתית
                 </button>
               )}
             </div>
@@ -342,7 +337,7 @@
                   <Upload size={48} className="text-slate-300 group-hover:text-indigo-600"/>
                 </div>
                 <h2 className="text-2xl font-black text-slate-800 text-center">בחר או גרור תמונות</h2>
-                <p className="text-slate-400 font-bold mt-2 text-center px-6">העלאה מרובה מהגלריה • בחירה בגרירה • חיתוך קבוצתי</p>
+                <p className="text-slate-400 font-bold mt-2 text-center px-6">העלאה מרובה • חיתוך אחיד • הורדה מהירה</p>
                 <p className="text-[10px] text-indigo-400 mt-4 font-black uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full">Pull down to refresh</p>
               </div>
             ) : (
@@ -355,8 +350,8 @@
                   <div className="flex items-center gap-4">
                     <button onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.accept="image/*"; i.onchange=e=>handleFiles(e.target.files); i.click(); }}
                             className="p-4 bg-slate-50 text-slate-500 rounded-2xl hover:bg-slate-100 border border-slate-100 shadow-sm transition-all"><Plus size={24}/></button>
-                    <button onClick={downloadAll} className="px-10 py-4 bg-slate-900 text-white rounded-[1.2rem] font-black text-sm hover:bg-black shadow-2xl flex items-center gap-3">
-                      <Download size={20}/> הורד את כל החיתוכים
+                    <button onClick={downloadAll} className="px-10 py-4 bg-slate-900 text-white rounded-[1.2rem] font-black text-sm hover:bg-black shadow-2xl flex items-center gap-3 active:scale-95 transition-all">
+                      <Download size={20}/> הורד הכל (מעובד)
                     </button>
                   </div>
                 </div>
@@ -379,7 +374,7 @@
                         </div>
                         {img.cropped && !selectedIds.has(img.id) && (
                           <div className="absolute inset-0 bg-emerald-500/10 flex items-center justify-center">
-                            <span className="bg-emerald-500 text-white px-4 py-1 rounded-full text-[10px] font-black uppercase shadow-lg">שמור</span>
+                            <span className="bg-emerald-500 text-white px-4 py-1 rounded-full text-[10px] font-black uppercase shadow-lg">מעובד</span>
                           </div>
                         )}
                       </div>
@@ -414,7 +409,7 @@
                   <div className="bg-indigo-600 text-white px-5 py-1.5 rounded-full text-[11px] font-black tracking-widest">{editingIndex + 1} / {images.length}</div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <button onClick={applyToAll} className="flex items-center gap-2 px-6 py-2.5 bg-white text-slate-900 rounded-xl text-[11px] font-black shadow-xl hover:bg-slate-100 transition-all">
+                  <button onClick={applyToAll} className="flex items-center gap-2 px-6 py-2.5 bg-white/10 text-white rounded-xl text-[11px] font-black shadow-xl hover:bg-white/20 transition-all active:scale-95">
                     <Copy size={16}/> החל על כולם
                   </button>
                   <button onClick={() => setEditingIndex(null)} className="p-2 text-slate-500 hover:text-white transition-all"><X size={28}/></button>
@@ -430,7 +425,7 @@
                         {l: '1:1', v: 1, w: 22, h: 22}, 
                         {l: '16:9', v: 16/9, w: 28, h: 16}, 
                         {l: '9:16', v: 9/16, w: 16, h: 28}, 
-                        {l: 'מלא', v: undefined, w: 24, h: 20}
+                        {l: 'חופשי', v: undefined, w: 24, h: 20}
                       ].map(a => (
                         <button key={a.l} onClick={() => changeAspect(a.v)} className={`aspect-btn ${aspect === a.v ? 'active' : ''}`}>
                           <div className="aspect-visual" style={{ width: a.w, height: a.h }}></div>
@@ -440,7 +435,7 @@
                     </div>
                   </div>
 
-                  <button onClick={() => setCrop(calculateInitialCrop(imgRef.current, aspect))} className="w-full py-4 border border-white/10 text-slate-500 hover:text-white rounded-2xl transition-all text-[11px] font-black uppercase flex items-center justify-center gap-2">
+                  <button onClick={() => setCrop(calculateInitialCrop(imgRef.current, aspect))} className="w-full py-4 border border-white/10 text-slate-500 hover:text-white rounded-2xl transition-all text-[11px] font-black uppercase flex items-center justify-center gap-2 active:scale-95">
                     <RefreshCw size={14}/> אפס מסגרת
                   </button>
                 </aside>
@@ -450,9 +445,9 @@
                     <ReactCrop 
                       crop={crop} 
                       onChange={c => setCrop(c)} 
-                      onComplete={c => setPixelCrop(c)} 
                       aspect={aspect}
                       keepSelection
+                      unit="%"
                     >
                       <img ref={imgRef} src={images[editingIndex].url} onLoad={onImageLoad} className="crop-target shadow-2xl"/>
                     </ReactCrop>
@@ -461,13 +456,21 @@
               </div>
 
               <footer className="h-24 bg-slate-900 border-t border-white/5 px-10 flex items-center justify-between shrink-0 z-20">
-                <button 
-                  onClick={() => setEditingIndex(i => Math.max(0, i-1))} 
-                  disabled={editingIndex === 0}
-                  className="w-14 h-14 bg-white/5 text-white rounded-2xl disabled:opacity-10 transition-all hover:bg-white/10 flex items-center justify-center"
-                >
-                  <ChevronRight size={32}/>
-                </button>
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => setEditingIndex(i => Math.max(0, i-1))} 
+                    disabled={editingIndex === 0}
+                    className="w-14 h-14 bg-white/5 text-white rounded-2xl disabled:opacity-10 transition-all hover:bg-white/10 flex items-center justify-center"
+                  >
+                    <ChevronRight size={32}/>
+                  </button>
+                  <button 
+                    onClick={() => setEditingIndex(null)} 
+                    className="h-14 px-6 bg-red-500/10 text-red-500 rounded-2xl font-black text-xs hover:bg-red-500/20 transition-all active:scale-95"
+                  >
+                    ביטול
+                  </button>
+                </div>
                 
                 <div className="flex items-center gap-6 bg-white/5 p-3 rounded-2xl border border-white/5">
                    <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className="p-2 text-slate-500 hover:text-white transition-all"><Minus size={22}/></button>
@@ -475,8 +478,8 @@
                    <button onClick={() => setZoom(z => Math.min(5, z + 0.25))} className="p-2 text-slate-500 hover:text-white transition-all"><Plus size={22}/></button>
                 </div>
 
-                <button onClick={handleSaveCurrent} className="px-16 h-14 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-2xl shadow-indigo-900/50 hover:bg-indigo-700 transition-all flex items-center gap-3">
-                  {editingIndex === images.length - 1 ? 'שמור וסיים' : 'התמונה הבאה'} <ChevronLeft size={22}/>
+                <button onClick={handleSaveCurrent} className="px-12 md:px-16 h-14 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-2xl shadow-indigo-900/50 hover:bg-indigo-700 transition-all flex items-center gap-3 active:scale-95">
+                  {editingIndex === images.length - 1 ? 'אישור וסיום' : 'אישור והמשך'} <Check size={22}/>
                 </button>
               </footer>
             </div>
