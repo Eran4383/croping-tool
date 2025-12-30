@@ -3,49 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BulkCrop - Professional Image Cropper</title>
-  
-  <!-- UI Framework -->
+  <title>BulkCrop Pro - Batch Image Editor</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Browser-side Transpiler -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  
   <style>
-    body { 
-      font-family: 'Plus Jakarta Sans', sans-serif; 
-      background-color: #f8fafc; 
-      color: #0f172a;
-    }
-    .cropper-container { 
-      position: relative; 
-      width: 100%; 
-      height: 100%; 
-      background: #000; 
-    }
-    .glass {
-      background: rgba(255, 255, 255, 0.7);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-    }
-    .animate-in {
-      animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: #f1f5f9; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; color: #0f172a; }
+    .animate-in { animation: fadeIn 0.3s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .cropper-container { position: relative; width: 100%; height: 100%; background: #000; }
   </style>
-
   <script type="importmap">
 {
   "imports": {
@@ -54,259 +23,303 @@
     "react-dom/client": "https://esm.sh/react-dom@19/client",
     "lucide-react": "https://esm.sh/lucide-react@0.460.0",
     "react-easy-crop": "https://esm.sh/react-easy-crop@5.2.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
 </head>
 <body>
   <div id="root"></div>
-
   <script type="text/babel" data-type="module" data-presets="react,typescript">
     import React, { useState, useCallback, useEffect, useRef } from 'react';
     import { createRoot } from 'react-dom/client';
     import { 
       Upload, Image as ImageIcon, ClipboardPaste, Crop, 
-      Download, Trash2, CheckCircle2, X, Check, Square, 
-      RectangleHorizontal, RectangleVertical, Move, ZoomIn, 
-      Layers, Github, Plus, RefreshCcw, Scissors
+      Download, Trash2, X, Check, Square, 
+      RectangleHorizontal, RectangleVertical, ZoomIn, 
+      Plus, Scissors, Settings2, FileType
     } from 'lucide-react';
     import Cropper from 'react-easy-crop';
 
     // --- UTILITIES ---
-    const createImage = (url) =>
-      new Promise((resolve, reject) => {
-        const image = new Image();
-        image.addEventListener('load', () => resolve(image));
-        image.addEventListener('error', (error) => reject(error));
-        image.setAttribute('crossOrigin', 'anonymous');
-        image.src = url;
+    const getCroppedImg = async (imageSrc, pixelCrop, format = 'image/jpeg') => {
+      const image = await new Promise((res, rej) => {
+        const img = new Image();
+        img.onload = () => res(img);
+        img.onerror = rej;
+        img.crossOrigin = 'anonymous';
+        img.src = imageSrc;
       });
-
-    const getCroppedImg = async (imageSrc, pixelCrop) => {
-      const image = await createImage(imageSrc);
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      if (!ctx) return '';
-
       canvas.width = pixelCrop.width;
       canvas.height = pixelCrop.height;
-
-      ctx.drawImage(
-        image,
-        pixelCrop.x,
-        pixelCrop.y,
-        pixelCrop.width,
-        pixelCrop.height,
-        0,
-        0,
-        pixelCrop.width,
-        pixelCrop.height
-      );
-
+      ctx.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, pixelCrop.width, pixelCrop.height);
       return new Promise((resolve) => {
-        canvas.toBlob((blob) => {
-          if (!blob) return;
-          resolve(URL.createObjectURL(blob));
-        }, 'image/jpeg', 0.95);
+        canvas.toBlob((blob) => resolve(URL.createObjectURL(blob)), format, 0.95);
       });
     };
 
     // --- COMPONENTS ---
-    const Dropzone = ({ onFilesAdded }) => {
-      const fileInputRef = useRef(null);
-      return (
-        <div
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => { e.preventDefault(); onFilesAdded(Array.from(e.dataTransfer.files)); }}
-          onClick={() => fileInputRef.current?.click()}
-          className="group relative border-2 border-dashed border-slate-200 rounded-[2rem] p-16 sm:p-24 transition-all hover:border-indigo-500 hover:bg-indigo-50/30 cursor-pointer flex flex-col items-center justify-center gap-6 bg-white shadow-sm hover:shadow-xl hover:scale-[1.01]"
-        >
-          <input type="file" ref={fileInputRef} onChange={(e) => e.target.files && onFilesAdded(Array.from(e.target.files))} className="hidden" multiple accept="image/*" />
-          <div className="w-24 h-24 bg-indigo-50 rounded-[2rem] flex items-center justify-center transition-all group-hover:scale-110 group-hover:rotate-3 shadow-inner text-indigo-600">
-            <Upload size={40} strokeWidth={2.5} />
-          </div>
-          <div className="text-center">
-            <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight mb-2">Drag images here</h3>
-            <p className="text-slate-500 font-medium text-lg">Batch process images locally. No uploads, no waiting.</p>
-          </div>
-          <div className="flex gap-4 mt-4">
-            <div className="flex gap-2 items-center text-[10px] font-black text-slate-400 bg-slate-100 px-4 py-2 rounded-full uppercase tracking-widest border border-slate-200 shadow-sm">
-              <ClipboardPaste size={14} /> Paste (Ctrl+V)
-            </div>
-            <div className="flex gap-2 items-center text-[10px] font-black text-slate-400 bg-slate-100 px-4 py-2 rounded-full uppercase tracking-widest border border-slate-200 shadow-sm">
-              <ImageIcon size={14} /> PNG, JPG, WebP
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-    const ImageCard = ({ item, onCrop, onRemove, onDownload }) => (
-      <div className="group bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col transition-all hover:shadow-2xl hover:-translate-y-2">
-        <div className="relative aspect-square bg-slate-50 overflow-hidden">
-          <img src={item.croppedUrl || item.previewUrl} alt={item.name} className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110" />
-          {item.croppedUrl && <div className="absolute top-4 right-4 bg-green-500 text-white p-1.5 rounded-full shadow-lg border-2 border-white animate-in"><Check size={16} strokeWidth={4} /></div>}
-          <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-3 backdrop-blur-[3px]">
-            <button onClick={() => onCrop(item.id)} className="p-3.5 bg-white text-slate-900 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all transform hover:scale-110 shadow-xl" title="Edit Crop"><Crop size={22} /></button>
-            <button onClick={() => onDownload(item)} className="p-3.5 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all transform hover:scale-110 shadow-xl" title="Download"><Download size={22} /></button>
-            <button onClick={() => onRemove(item.id)} className="p-3.5 bg-white text-red-600 rounded-2xl hover:bg-red-600 hover:text-white transition-all transform hover:scale-110 shadow-xl" title="Remove"><Trash2 size={22} /></button>
-          </div>
-        </div>
-        <div className="p-5 border-t border-slate-100 flex items-center justify-between gap-4">
-          <p className="text-[11px] font-black text-slate-500 truncate uppercase tracking-widest leading-none" title={item.name}>{item.name}</p>
-        </div>
-      </div>
-    );
-
-    const CropModal = ({ isOpen, imageSrc, imageName, onClose, onSave }) => {
+    const App = () => {
+      const [images, setImages] = useState([]);
+      const [editingId, setEditingId] = useState(null);
+      const [exportFormat, setExportFormat] = useState('image/jpeg');
       const [crop, setCrop] = useState({ x: 0, y: 0 });
       const [zoom, setZoom] = useState(1);
       const [aspect, setAspect] = useState(1);
       const [pixels, setPixels] = useState(null);
-      if (!isOpen) return null;
-      return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 backdrop-blur-md p-4 animate-in">
-          <div className="bg-white w-full max-w-6xl h-[90vh] rounded-[3rem] flex flex-col overflow-hidden shadow-2xl border border-white/20">
-            <div className="px-10 py-8 border-b border-slate-100 flex items-center justify-between bg-white">
-              <div>
-                <h3 className="text-3xl font-black text-slate-900 leading-none tracking-tight">Editor</h3>
-                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em] mt-3 bg-indigo-50 inline-block px-3 py-1 rounded-full">{imageName}</p>
-              </div>
-              <button onClick={onClose} className="p-4 hover:bg-slate-100 rounded-full text-slate-400 transition-all active:scale-90"><X size={32} /></button>
-            </div>
-            <div className="flex-1 relative bg-slate-950">
-              <Cropper image={imageSrc} crop={crop} zoom={zoom} aspect={aspect} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_, p) => setPixels(p)} />
-            </div>
-            <div className="p-10 bg-white grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-              <div className="lg:col-span-4">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Ratio Presets</span>
-                <div className="grid grid-cols-4 gap-2 bg-slate-50 p-2 rounded-2xl">
-                  {[1, 1.77, 0.56, 0].map((v, i) => (
-                    <button key={i} onClick={() => setAspect(v || undefined)} className={`py-3.5 rounded-xl text-[10px] font-black transition-all ${aspect === v || (v === 0 && aspect === undefined) ? 'bg-white text-indigo-600 shadow-md scale-[1.02]' : 'text-slate-400 hover:text-slate-600'}`}>
-                      {v === 1 ? '1:1' : v === 1.77 ? '16:9' : v === 0.56 ? '9:16' : 'Free'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="lg:col-span-4">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Zoom & Scale</span>
-                <div className="flex items-center gap-6">
-                  <ZoomIn size={20} className="text-slate-300" />
-                  <input type="range" value={zoom} min={1} max={3} step={0.01} onChange={(e) => setZoom(Number(e.target.value))} className="w-full h-1.5 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600" />
-                  <span className="text-xs font-black text-slate-500 w-10 tabular-nums">{Math.round(zoom * 100)}%</span>
-                </div>
-              </div>
-              <div className="lg:col-span-4 flex gap-4">
-                <button onClick={onClose} className="flex-1 py-5 rounded-2xl font-black text-slate-500 bg-slate-50 hover:bg-slate-100 transition-all">Cancel</button>
-                <button onClick={() => pixels && onSave(pixels)} className="flex-[2] py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-2xl shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95">Save Changes</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    };
 
-    // --- MAIN APP ---
-    const App = () => {
-      const [images, setImages] = useState([]);
-      const [editingId, setEditingId] = useState(null);
-
-      const handleFiles = useCallback((files) => {
-        const newImgs = Array.from(files).filter(f => f.type.startsWith('image/')).map(file => ({
-          id: Math.random().toString(36).substr(2, 9),
-          file, previewUrl: URL.createObjectURL(file), name: file.name, croppedUrl: null
-        }));
+      const handleFiles = (files) => {
+        const newImgs = Array.from(files)
+          .filter(f => f.type.startsWith('image/'))
+          .map(file => ({
+            id: Math.random().toString(36).substr(2, 9),
+            previewUrl: URL.createObjectURL(file),
+            name: file.name,
+            croppedUrl: null,
+            format: file.type
+          }));
         setImages(prev => [...prev, ...newImgs]);
-      }, []);
+      };
 
-      useEffect(() => {
-        const paste = (e) => {
-          const files = Array.from(e.clipboardData?.items || []).filter(i => i.type.startsWith('image/')).map(i => i.getAsFile());
-          if (files.length) handleFiles(files);
-        };
-        window.addEventListener('paste', paste);
-        return () => window.removeEventListener('paste', paste);
-      }, [handleFiles]);
+      const removeImage = (id) => setImages(prev => prev.filter(img => img.id !== id));
 
-      const onSave = async (px) => {
-        const item = images.find(i => i.id === editingId);
-        const croppedUrl = await getCroppedImg(item.previewUrl, px);
-        setImages(prev => prev.map(i => i.id === editingId ? { ...i, croppedUrl } : i));
+      const saveCrop = async (id = editingId) => {
+        const item = images.find(i => i.id === id);
+        const url = await getCroppedImg(item.previewUrl, pixels, exportFormat);
+        setImages(prev => prev.map(i => i.id === id ? { ...i, croppedUrl: url } : i));
+        setEditingId(null);
+      };
+
+      const applyToAll = async () => {
+        if (!pixels) return;
+        const currentAspect = aspect;
+        const currentZoom = zoom;
+        const currentPixels = { ...pixels };
+        
+        const updatedImages = await Promise.all(images.map(async (img) => {
+          if (img.id === editingId || !img.croppedUrl) {
+            const url = await getCroppedImg(img.previewUrl, currentPixels, exportFormat);
+            return { ...img, croppedUrl: url };
+          }
+          return img;
+        }));
+        
+        setImages(updatedImages);
         setEditingId(null);
       };
 
       const download = (item) => {
-        const a = document.createElement('a'); 
-        a.href = item.croppedUrl || item.previewUrl; 
-        a.download = `crop-${item.name}`; 
+        const a = document.createElement('a');
+        const ext = exportFormat.split('/')[1];
+        a.href = item.croppedUrl || item.previewUrl;
+        a.download = `cropped-${item.name.split('.')[0]}.${ext}`;
         a.click();
-      };
-
-      const downloadAll = async () => {
-        for (const img of images) { download(img); await new Promise(r => setTimeout(r, 400)); }
       };
 
       const editingItem = images.find(i => i.id === editingId);
 
       return (
-        <div className="min-h-screen">
-          <nav className="h-24 border-b border-slate-100 bg-white/70 backdrop-blur-2xl sticky top-0 z-40 px-8 sm:px-12 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-xl shadow-indigo-100 rotate-3 transition-transform hover:rotate-0">
-                <Scissors size={24} />
+        <div className="min-h-screen pb-20">
+          <nav className="h-20 bg-white border-b border-slate-100 px-8 flex items-center justify-between sticky top-0 z-40">
+            <div className="flex items-center gap-3">
+              <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg shadow-indigo-100">
+                <Scissors size={20} />
               </div>
-              <span className="text-3xl font-black tracking-tighter text-slate-900">BulkCrop</span>
+              <span className="text-xl font-bold tracking-tight">BulkCrop Pro</span>
             </div>
-            <div className="hidden sm:flex items-center gap-8">
-              <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-5 py-2.5 rounded-full border border-slate-100">
-                <kbd className="bg-white px-2 py-0.5 border rounded shadow-sm text-slate-900 font-bold">CTRL+V</kbd>
-                <span>Quick Paste</span>
+            <div className="flex items-center gap-4">
+               <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                <FileType size={14} className="text-slate-400" />
+                <select 
+                  value={exportFormat} 
+                  onChange={(e) => setExportFormat(e.target.value)}
+                  className="bg-transparent text-[10px] font-bold uppercase tracking-widest outline-none cursor-pointer"
+                >
+                  <option value="image/jpeg">JPEG</option>
+                  <option value="image/png">PNG</option>
+                  <option value="image/webp">WebP</option>
+                </select>
               </div>
-              <a href="https://github.com" className="text-slate-400 hover:text-slate-900 transition-all hover:scale-110"><Github size={28} /></a>
             </div>
           </nav>
-          
-          <main className="max-w-7xl mx-auto px-8 pt-20 pb-40">
-            <header className="text-center mb-24">
-              <h1 className="text-6xl sm:text-9xl font-extrabold text-slate-900 tracking-tightest mb-8 leading-[0.9]">CROP <span className="text-indigo-600">FASTER.</span></h1>
-              <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-3xl mx-auto leading-relaxed">The ultimate browser tool for batch cropping images. Your data never leaves your computer.</p>
-            </header>
 
+          <main className="max-w-6xl mx-auto px-6 pt-12">
             {images.length === 0 ? (
-              <div className="max-w-4xl mx-auto"><Dropzone onFilesAdded={handleFiles} /></div>
+              <div 
+                className="border-2 border-dashed border-slate-200 rounded-[2.5rem] p-24 bg-white text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/20 transition-all flex flex-col items-center group"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.multiple = true;
+                  input.accept = 'image/*';
+                  input.onchange = (e) => handleFiles(e.target.files);
+                  input.click();
+                }}
+              >
+                <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                  <Upload size={32} />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-800">Select Images</h2>
+                <p className="text-slate-400 mt-2">Pick from gallery or drag and drop files here</p>
+                <div className="mt-8 flex gap-3">
+                  <span className="px-4 py-2 bg-slate-100 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-500">Multi-select enabled</span>
+                </div>
+              </div>
             ) : (
-              <div className="space-y-12 animate-in">
-                <div className="bg-white p-8 rounded-[3rem] shadow-2xl shadow-slate-200/50 border border-slate-100 flex flex-col lg:flex-row items-center justify-between gap-8">
-                  <div className="flex items-center gap-10 pl-6">
-                    <div className="text-center lg:text-left">
-                      <p className="text-4xl font-black leading-none text-slate-900">{images.length}</p>
-                      <p className="text-[10px] font-black text-slate-400 uppercase mt-2 tracking-[0.3em]">Images Loaded</p>
+              <div className="space-y-8 animate-in">
+                <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                  <div className="flex items-center gap-6">
+                    <div className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-sm">
+                      {images.length} Files Loaded
                     </div>
-                    <div className="h-12 w-[1px] bg-slate-100 hidden sm:block"></div>
-                    <button onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.onchange=(e)=>handleFiles(e.target.files); i.click(); }} className="flex items-center gap-3 text-indigo-600 font-black text-sm px-6 py-3 hover:bg-indigo-50 rounded-2xl transition-all"><Plus size={20} /> Add More</button>
+                    <button 
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.multiple = true;
+                        input.accept = 'image/*';
+                        input.onchange = (e) => handleFiles(e.target.files);
+                        input.click();
+                      }}
+                      className="flex items-center gap-2 text-indigo-600 font-bold text-sm hover:bg-indigo-50 px-4 py-2 rounded-xl transition-colors"
+                    >
+                      <Plus size={18} /> Add More
+                    </button>
                   </div>
-                  <div className="flex gap-4 w-full lg:w-auto">
-                    <button onClick={() => setImages([])} className="flex-1 lg:flex-none px-10 py-4 text-slate-500 font-black text-sm hover:text-red-600 transition-colors">Clear All</button>
-                    <button onClick={downloadAll} className="flex-1 lg:flex-none px-12 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-sm shadow-2xl shadow-indigo-100 flex items-center justify-center gap-3 hover:bg-indigo-700 transition-all active:scale-95 group">
-                      <Download size={20} className="group-hover:translate-y-1 transition-transform" /> Download All
+                  <div className="flex gap-3">
+                    <button onClick={() => setImages([])} className="px-6 py-2.5 text-slate-400 font-bold text-sm hover:text-red-500 transition-colors">Clear All</button>
+                    <button 
+                      onClick={() => images.forEach(download)}
+                      className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                    >
+                      Download All
                     </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-10">
-                  {images.map(img => <ImageCard key={img.id} item={img} onCrop={setEditingId} onRemove={(id) => setImages(p => p.filter(i => i.id !== id))} onDownload={download} />)}
+
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                  {images.map(img => (
+                    <div key={img.id} className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm transition-all hover:shadow-lg">
+                      <div className="aspect-square relative">
+                        <img src={img.croppedUrl || img.previewUrl} className="w-full h-full object-cover" />
+                        
+                        {/* Status Badge */}
+                        {img.croppedUrl && (
+                          <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg flex items-center gap-1">
+                            <Check size={10} strokeWidth={4} /> Cropped
+                          </div>
+                        )}
+
+                        {/* Corner Delete Button */}
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); removeImage(img.id); }}
+                          className="absolute top-2 right-2 p-1.5 bg-white/90 text-slate-400 rounded-full hover:bg-red-500 hover:text-white transition-all shadow-sm opacity-0 group-hover:opacity-100"
+                        >
+                          <X size={14} strokeWidth={3} />
+                        </button>
+
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-3">
+                          <button 
+                            onClick={() => setEditingId(img.id)}
+                            className="p-3 bg-white text-indigo-600 rounded-xl hover:scale-110 transition-transform shadow-xl"
+                          >
+                            <Crop size={20} />
+                          </button>
+                          <button 
+                            onClick={() => download(img)}
+                            className="p-3 bg-indigo-600 text-white rounded-xl hover:scale-110 transition-transform shadow-xl"
+                          >
+                            <Download size={20} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="p-3 text-[10px] font-bold text-slate-500 truncate bg-white">
+                        {img.name}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
           </main>
-          
-          <footer className="fixed bottom-0 left-0 right-0 bg-white/60 backdrop-blur-3xl border-t border-slate-100 py-6 px-12 flex justify-between items-center text-[11px] font-black uppercase tracking-[0.4em] text-slate-400 z-30">
-            <span className="flex items-center gap-3"><RefreshCcw size={14} /> Private Local-Only Sync</span>
-            <span>&copy; BulkCrop {new Date().getFullYear()}</span>
-          </footer>
 
-          {editingItem && <CropModal isOpen={!!editingId} imageSrc={editingItem.previewUrl} imageName={editingItem.name} onClose={() => setEditingId(null)} onSave={onSave} />}
+          {editingItem && (
+            <div className="fixed inset-0 z-50 bg-slate-900/95 flex items-center justify-center p-4 animate-in">
+              <div className="bg-white w-full max-w-5xl h-[90vh] rounded-[2.5rem] flex flex-col overflow-hidden shadow-2xl">
+                <div className="px-8 py-6 border-b flex justify-between items-center">
+                  <div className="flex items-center gap-4">
+                    <h3 className="text-xl font-bold">Crop Editor</h3>
+                    <span className="text-xs font-bold text-slate-400 truncate max-w-[200px]">{editingItem.name}</span>
+                  </div>
+                  <button onClick={() => setEditingId(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-all">
+                    <X size={28} />
+                  </button>
+                </div>
+
+                <div className="flex-1 relative bg-black">
+                  <Cropper 
+                    image={editingItem.previewUrl} 
+                    crop={crop} 
+                    zoom={zoom} 
+                    aspect={aspect} 
+                    onCropChange={setCrop} 
+                    onZoomChange={setZoom} 
+                    onCropComplete={(_, p) => setPixels(p)} 
+                  />
+                </div>
+
+                <div className="p-8 flex flex-col gap-6 bg-white border-t">
+                  <div className="flex flex-wrap items-center justify-between gap-6">
+                    <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                      {[
+                        { label: '1:1', val: 1 },
+                        { label: '16:9', val: 16/9 },
+                        { label: '9:16', val: 9/16 },
+                        { label: 'Free', val: undefined }
+                      ].map(v => (
+                        <button 
+                          key={v.label} 
+                          onClick={() => setAspect(v.val)}
+                          className={`px-6 py-2 rounded-lg text-xs font-bold transition-all ${aspect === v.val ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                          {v.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-4 flex-1 max-w-xs px-4">
+                      <ZoomIn size={18} className="text-slate-300" />
+                      <input 
+                        type="range" 
+                        min={1} max={3} step={0.1} 
+                        value={zoom} 
+                        onChange={(e) => setZoom(Number(e.target.value))}
+                        className="w-full h-1.5 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600"
+                      />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={applyToAll}
+                        className="px-6 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-indigo-100 transition-all"
+                      >
+                        <Settings2 size={18} /> Apply to All
+                      </button>
+                      <button 
+                        onClick={() => saveCrop()}
+                        className="px-10 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all"
+                      >
+                        Save Selection
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     };
