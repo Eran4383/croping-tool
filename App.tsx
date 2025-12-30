@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { Dropzone } from './components/Dropzone';
 import { ImageCard } from './components/ImageCard';
@@ -115,7 +114,7 @@ const App: React.FC = () => {
               <div className="bg-indigo-600 p-1.5 rounded-lg shadow-indigo-200 shadow-lg">
                 <Layers className="text-white w-5 h-5" />
               </div>
-              <span className="text-xl font-black tracking-tight text-slate-900">InstaCrop</span>
+              <span className="text-xl font-black tracking-tight text-slate-900">BulkCrop</span>
             </div>
             <div className="flex items-center gap-6">
               <span className="hidden md:inline-flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full">
@@ -220,7 +219,7 @@ const App: React.FC = () => {
       )}
 
       <footer className="fixed bottom-0 left-0 right-0 bg-white/60 backdrop-blur-xl border-t border-slate-100 py-3 px-6 flex justify-between items-center text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-widest">
-        <span>&copy; {new Date().getFullYear()} InstaCrop Bulk</span>
+        <span>&copy; {new Date().getFullYear()} BulkCrop</span>
         <span className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
           Local Processing Active
