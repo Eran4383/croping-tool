@@ -21,14 +21,13 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      /* Prevent system gestures while dragging */
       touch-action: pan-y;
     }
     
     .animate-in { animation: fadeIn 0.15s ease-out forwards; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* ReactCrop Styles Customization */
+    /* ReactCrop Customization */
     .ReactCrop { 
       z-index: 100 !important; 
       max-width: 100%;
@@ -38,7 +37,7 @@
       z-index: 110 !important;
       border: 1px solid rgba(255,255,255,1) !important;
       outline: 1px solid var(--primary) !important;
-      box-shadow: 0 0 0 9999em rgba(0, 0, 0, 0.85) !important;
+      box-shadow: 0 0 0 9999em rgba(0, 0, 0, 0.8) !important;
     }
     .ReactCrop__drag-handle { 
       z-index: 120 !important;
@@ -49,7 +48,6 @@
       border: 2px solid white !important;
     }
 
-    /* Editor Layout */
     .editor-stage {
       flex: 1;
       position: relative;
@@ -59,6 +57,7 @@
       justify-content: center;
       overflow: hidden;
       padding: 10px;
+      touch-action: none;
     }
 
     .image-workspace {
@@ -82,7 +81,6 @@
     .custom-scrollbar::-webkit-scrollbar { width: 4px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 
-    /* Grid selection styling */
     .selectable-card {
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       user-select: none;
@@ -101,7 +99,6 @@
       color: #64748b;
     }
     
-    /* Remove text selection for a cleaner feel */
     .no-select { user-select: none; -webkit-user-select: none; }
   </style>
   <script type="importmap">
@@ -124,14 +121,13 @@
     import { createRoot } from 'react-dom/client';
     import { 
       Upload, Scissors, Crop, Download, Trash2, X, Check, 
-      Plus, ChevronLeft, ChevronRight, Layers, Sparkles, Palette, 
-      FileText, Settings2, MousePointer2, Minus
+      Plus, ChevronLeft, ChevronRight, Layers, Settings2, Minus
     } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
     import { jsPDF } from 'jspdf';
 
     const App = () => {
-      // Global State
+      // Gallery State
       const [images, setImages] = useState([]);
       const [editingIndex, setEditingIndex] = useState(null);
       const [isSelectMode, setIsSelectMode] = useState(false);
@@ -153,7 +149,6 @@
       const workspaceRef = useRef(null);
       const touchDistRef = useRef(0);
 
-      // --- Upload Logic ---
       const handleFiles = useCallback((files) => {
         const newFiles = Array.from(files).filter(f => f.type.startsWith('image/')).map(f => ({
           id: Math.random().toString(36).substr(2, 9),
@@ -175,7 +170,6 @@
         return () => window.removeEventListener('paste', handlePaste);
       }, [handleFiles]);
 
-      // --- Selection Logic ---
       const toggleSelect = (id) => {
         setSelectedIds(prev => {
           const next = new Set(prev);
@@ -191,15 +185,17 @@
         setIsSelectMode(false);
       };
 
-      // --- Editor Logic ---
-      const recalculateCrop = useCallback((img, targetAspect) => {
+      // Recalculates the crop frame based on current image and requested aspect ratio
+      const resetCrop = useCallback((img, targetAspect) => {
         if (!img) return;
         const { width, height } = img;
-        // If aspect is free (undefined), we use the image's original aspect for the initial frame
-        const finalAspect = targetAspect !== undefined ? targetAspect : (width / height);
+        
+        // If targetAspect is undefined (Free), we use the image's intrinsic aspect for the initial box shape
+        // so it looks like a full frame instead of a line.
+        const effectiveAspect = targetAspect !== undefined ? targetAspect : (width / height);
         
         const initialCrop = centerCrop(
-          makeAspectCrop({ unit: '%', width: 90 }, finalAspect, width, height),
+          makeAspectCrop({ unit: '%', width: 90 }, effectiveAspect, width, height),
           width, height
         );
         setCrop(initialCrop);
@@ -207,16 +203,15 @@
 
       const onImageLoad = (e) => {
         imgRef.current = e.currentTarget;
-        recalculateCrop(e.currentTarget, aspect);
+        resetCrop(e.currentTarget, aspect);
         setZoom(1);
       };
 
       const changeAspect = (newAspect) => {
         setAspect(newAspect);
-        if (imgRef.current) recalculateCrop(imgRef.current, newAspect);
+        if (imgRef.current) resetCrop(imgRef.current, newAspect);
       };
 
-      // --- Pinch-to-Zoom ---
       const handleTouchStart = (e) => {
         if (e.touches.length === 2) {
           touchDistRef.current = Math.hypot(
@@ -238,7 +233,6 @@
         }
       };
 
-      // --- Save Logic ---
       const generateCrop = async () => {
         if (!pixelCrop || editingIndex === null || !imgRef.current) return;
         const image = imgRef.current;
@@ -314,7 +308,6 @@
              onDragOver={e => e.preventDefault()} 
              onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}>
           
-          {/* Header */}
           <header className="h-14 bg-white border-b px-6 flex items-center justify-between z-40 shadow-sm shrink-0">
             <div className="flex items-center gap-2">
               <div className="bg-indigo-600 p-1.5 rounded-lg text-white"><Scissors size={18}/></div>
@@ -323,53 +316,51 @@
             <div className="flex gap-2">
               {images.length > 0 && (
                 <button onClick={() => setIsSelectMode(!isSelectMode)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${isSelectMode ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                  {isSelectMode ? `ביטול (${selectedIds.size})` : 'מצב בחירה'}
+                  {isSelectMode ? `סיום (${selectedIds.size})` : 'מצב בחירה'}
                 </button>
               )}
               {isSelectMode && selectedIds.size > 0 && (
-                <button onClick={handleBatchDelete} className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md hover:bg-red-600">מחק {selectedIds.size}</button>
+                <button onClick={handleBatchDelete} className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md hover:bg-red-600">מחק ({selectedIds.size})</button>
               )}
               {images.length > 0 && !isSelectMode && (
-                <button onClick={() => setEditingIndex(0)} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-md hover:bg-indigo-700">ערוך הכל</button>
+                <button onClick={() => setEditingIndex(0)} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold shadow-md hover:bg-indigo-700">ערוך עכשיו</button>
               )}
             </div>
           </header>
 
-          {/* Gallery View */}
           <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
             {images.length === 0 ? (
               <div onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.accept="image/*"; i.onchange=e=>handleFiles(e.target.files); i.click(); }}
                    className="h-full border-2 border-dashed border-slate-200 bg-white rounded-[2rem] flex flex-col items-center justify-center cursor-pointer hover:border-indigo-300 transition-all group">
                 <Upload size={40} className="text-slate-300 group-hover:text-indigo-500 mb-4 transition-all"/>
-                <p className="text-slate-500 font-bold">העלה תמונות מהמחשב או מהגלריה</p>
-                <p className="text-slate-300 text-xs mt-1">גרור קבצים או הדבק (Ctrl+V)</p>
+                <p className="text-slate-500 font-bold">גרור תמונות או בחר מהגלריה</p>
+                <p className="text-slate-300 text-xs mt-1">Ctrl+V להדבקה מהירה</p>
               </div>
             ) : (
-              <div className="max-w-6xl mx-auto space-y-6">
+              <div className="max-w-6xl mx-auto space-y-6 animate-in">
                 <div className="flex justify-between items-end bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                   <div>
                     <h2 className="text-lg font-bold text-slate-800">התמונות שלי</h2>
                     <span className="text-[10px] uppercase font-black text-slate-400 tracking-widest">{images.length} פריטים</span>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={exportPDF} disabled={isExporting} className="px-3 py-2 bg-slate-50 border text-slate-600 rounded-xl text-[11px] font-bold hover:bg-slate-100 disabled:opacity-30">PDF</button>
+                    <button onClick={exportPDF} disabled={isExporting} className="px-3 py-2 bg-slate-50 border text-slate-600 rounded-xl text-[11px] font-bold hover:bg-slate-100">PDF</button>
                     <button onClick={downloadAll} className="px-5 py-2 bg-slate-900 text-white rounded-xl text-[11px] font-bold hover:bg-black shadow-lg">הורד הכל</button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3"
-                     onMouseUp={() => setIsDraggingSelection(false)}>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                   {images.map((img, idx) => (
                     <div key={img.id} 
                          onMouseDown={() => { if(isSelectMode) { setIsDraggingSelection(true); toggleSelect(img.id); } }}
                          onMouseEnter={() => { if(isDraggingSelection) toggleSelect(img.id); }}
+                         onMouseUp={() => setIsDraggingSelection(false)}
                          onClick={() => { if(!isSelectMode) setEditingIndex(idx); else toggleSelect(img.id); }}
                          className={`selectable-card group relative bg-white p-1.5 rounded-xl border border-slate-100 shadow-sm cursor-pointer ${selectedIds.has(img.id) ? 'selected' : 'hover:border-indigo-200'}`}>
                       <div className="aspect-square relative rounded-lg overflow-hidden bg-slate-50">
                         <img src={img.cropped || img.url} className="w-full h-full object-cover" />
                         {img.cropped && <div className="absolute top-1 right-1 bg-emerald-500 text-white p-1 rounded-full shadow-md"><Check size={8} strokeWidth={4}/></div>}
                         
-                        {/* Status Checkbox in Select Mode */}
                         {isSelectMode && (
                           <div className={`absolute inset-0 flex items-center justify-center transition-all ${selectedIds.has(img.id) ? 'bg-indigo-600/20' : 'bg-black/5 opacity-0 group-hover:opacity-100'}`}>
                             <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedIds.has(img.id) ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-white bg-white/30'}`}>
@@ -378,43 +369,39 @@
                           </div>
                         )}
 
-                        {/* Individual Remove Button */}
                         <button onClick={(e) => { e.stopPropagation(); setImages(prev => prev.filter(i => i.id !== img.id)); }}
-                                className="absolute bottom-1 left-1 p-1.5 bg-red-500/90 text-white rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all shadow-md">
+                                className="absolute bottom-1 left-1 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all shadow-md">
                           <Trash2 size={12}/>
                         </button>
                       </div>
-                      <p className="text-[9px] font-bold text-slate-400 mt-2 truncate text-center uppercase tracking-tighter">{img.name}</p>
+                      <p className="text-[9px] font-bold text-slate-400 mt-2 truncate text-center uppercase">{img.name}</p>
                     </div>
                   ))}
                   <button onClick={() => { const i = document.createElement('input'); i.type='file'; i.multiple=true; i.accept="image/*"; i.onchange=e=>handleFiles(e.target.files); i.click(); }}
                           className="aspect-square border-2 border-dashed border-slate-200 bg-white rounded-xl flex flex-col items-center justify-center gap-1 text-slate-300 hover:border-indigo-200 hover:text-indigo-400 transition-all">
-                    <Plus size={20}/><span className="text-[9px] font-black">הוסף</span>
+                    <Plus size={20}/><span className="text-[9px] font-black uppercase">הוסף</span>
                   </button>
                 </div>
               </div>
             )}
           </main>
 
-          {/* Full Screen Editor Modal */}
           {editingIndex !== null && (
             <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col animate-in">
-              {/* Editor Header */}
               <header className="h-10 px-4 flex justify-between items-center bg-slate-900 border-b border-slate-800 shrink-0">
                 <div className="flex items-center gap-3">
                   <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-[9px] font-black">{editingIndex + 1} / {images.length}</span>
                   <span className="text-xs font-medium text-slate-300 truncate max-w-[150px]">{images[editingIndex].name}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => setZoom(z => Math.max(0.5, z - 0.2))} className="p-1.5 text-slate-400 hover:text-white transition-all"><Minus size={14}/></button>
+                  <button onClick={() => setZoom(z => Math.max(0.5, z - 0.2))} className="p-1.5 text-slate-400 hover:text-white"><Minus size={14}/></button>
                   <span className="text-[9px] font-bold text-slate-600 w-10 text-center">{Math.round(zoom * 100)}%</span>
-                  <button onClick={() => setZoom(z => Math.min(5, z + 0.2))} className="p-1.5 text-slate-400 hover:text-white transition-all"><Plus size={14}/></button>
+                  <button onClick={() => setZoom(z => Math.min(5, z + 0.2))} className="p-1.5 text-slate-400 hover:text-white"><Plus size={14}/></button>
                   <button onClick={() => setEditingIndex(null)} className="p-1.5 text-slate-500 hover:text-red-400 transition-all ml-4"><X size={18}/></button>
                 </div>
               </header>
 
               <div className="flex-1 flex overflow-hidden">
-                {/* Editor Tools Sidebar */}
                 <aside className="w-14 md:w-52 bg-slate-900 border-l border-slate-800 p-4 space-y-6 overflow-y-auto no-scrollbar shrink-0 order-2 md:order-1">
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -423,13 +410,11 @@
                     </div>
                     {expandCanvas && (
                       <div className="space-y-2 pt-2 border-t border-slate-800 animate-in">
-                        <div className="grid grid-cols-1 gap-1">
-                          {['blur', 'color'].map(t => (
-                            <button key={t} onClick={() => setBgType(t)} className={`py-1.5 px-2 rounded text-[10px] font-bold text-right transition-all ${bgType === t ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500 hover:bg-slate-700'}`}>
-                              {t === 'blur' ? 'טשטוש רקע' : 'צבע אחיד'}
-                            </button>
-                          ))}
-                        </div>
+                        {['blur', 'color'].map(t => (
+                          <button key={t} onClick={() => setBgType(t)} className={`w-full py-1.5 px-2 rounded text-[10px] font-bold text-right transition-all ${bgType === t ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500 hover:bg-slate-700'}`}>
+                            {t === 'blur' ? 'טשטוש רקע' : 'צבע אחיד'}
+                          </button>
+                        ))}
                         {bgType === 'color' && <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-full h-7 p-0 bg-transparent border-0 cursor-pointer"/>}
                       </div>
                     )}
@@ -450,7 +435,6 @@
                   </div>
                 </aside>
 
-                {/* Editor Stage */}
                 <section className="editor-stage order-1 md:order-2" 
                          onTouchStart={handleTouchStart} 
                          onTouchMove={handleTouchMove}>
@@ -472,15 +456,13 @@
                 </section>
               </div>
 
-              {/* Editor Footer */}
               <footer className="h-14 bg-slate-900 border-t border-slate-800 px-6 flex items-center justify-between shrink-0 z-20">
                 <button onClick={() => setEditingIndex(i => Math.max(0, i-1))} disabled={editingIndex === 0}
-                        className="px-5 py-2.5 bg-slate-800 text-slate-400 rounded-xl font-bold text-xs hover:bg-slate-700 disabled:opacity-10 flex items-center gap-2 transition-all">
+                        className="px-5 py-2.5 bg-slate-800 text-slate-400 rounded-xl font-bold text-xs hover:bg-slate-700 disabled:opacity-10 flex items-center gap-2">
                   <ChevronRight size={14}/> קודם
                 </button>
-                <div className="hidden sm:block text-[9px] font-black text-slate-700 tracking-[0.3em] uppercase">Pro Editor Mode</div>
-                <button onClick={handleFinishCurrent} className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs shadow-lg hover:bg-indigo-700 flex items-center gap-2 transition-all">
-                  {editingIndex === images.length - 1 ? 'סיים ושמור' : 'הבא'} <ChevronLeft size={14}/>
+                <button onClick={handleFinishCurrent} className="px-10 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs shadow-lg hover:bg-indigo-700 flex items-center gap-2">
+                  {editingIndex === images.length - 1 ? 'שמור וסיים' : 'הבא'} <ChevronLeft size={14}/>
                 </button>
               </footer>
             </div>
