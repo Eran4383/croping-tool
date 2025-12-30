@@ -153,6 +153,8 @@
     } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 
+    const VERSION = "v1.1.5";
+
     const App = () => {
       const [images, setImages] = useState([]);
       const [editingIndex, setEditingIndex] = useState(null);
@@ -215,9 +217,9 @@
           width, height
         );
         
-        // If height calculation results in something smaller, makeAspectCrop handles it,
-        // but let's ensure it's not a line.
-        if (newCrop.height === 0) newCrop.height = 100;
+        // Safety check to ensure height/width are never 0
+        if (newCrop.height <= 0) newCrop.height = 100;
+        if (newCrop.width <= 0) newCrop.width = 100;
         
         return newCrop;
       };
@@ -321,7 +323,12 @@
           <header className="h-16 bg-white border-b px-6 flex items-center justify-between z-40 sticky top-0">
             <div className="flex items-center gap-3">
               <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg"><Scissors size={20}/></div>
-              <h1 className="text-xl font-black text-slate-900">Bulk Crop</h1>
+              <div className="flex flex-col md:flex-row md:items-center">
+                <h1 className="text-xl font-black text-slate-900 leading-none">Bulk Crop</h1>
+                <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full md:mr-3 font-bold mt-1 md:mt-0 self-start md:self-auto">
+                  {VERSION}
+                </span>
+              </div>
             </div>
             <div className="flex gap-2">
               {images.length > 0 && selectedIds.size > 0 && (
@@ -348,6 +355,7 @@
                 </div>
                 <h2 className="text-2xl font-black text-slate-800 text-center">בחר או גרור תמונות</h2>
                 <p className="text-slate-400 font-bold mt-2 text-center px-6">העלאה מרובה מהגלריה • בחירה בגרירה • חיתוך קבוצתי</p>
+                <p className="text-[10px] text-slate-300 mt-4 font-black uppercase tracking-widest">Pull down on mobile to refresh page</p>
               </div>
             ) : (
               <div className="max-w-7xl mx-auto space-y-10 animate-in">
@@ -406,7 +414,7 @@
 
           <footer className="py-10 text-center border-t border-slate-100 bg-white">
              <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">
-               Bulk Crop Engine v1.1.2 • Last Update: {new Date().toLocaleTimeString()}
+               Bulk Crop Engine {VERSION} • Last Update: {new Date().toLocaleTimeString()}
              </p>
              <p className="text-[9px] text-slate-400 mt-2 font-bold">גרירה למטה במובייל לריענון הדף</p>
           </footer>
