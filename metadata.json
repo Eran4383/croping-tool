@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v2.5.3 - תיקון קריטי לרזולוציית פלט, טיפול בשגיאות קואורדינטות (RTL) והוספת הורדה בודדת לגלריה.",
+  "description": "v2.3.0 - מנוע חיתוך אבסולוטי (Pixel-Perfect) ללא עיוותים, מותאם מלא למובייל.",
   "requestFramePermissions": []
 }
