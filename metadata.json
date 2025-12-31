@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v2.3.0 - מנוע חיתוך אבסולוטי (Pixel-Perfect) ללא עיוותים, מותאם מלא למובייל.",
+  "description": "v2.6.0 - תיקון קריטי למנגנון העריכה: כפתורי מימדים, החלה גורפת ושמירה יציבה.",
   "requestFramePermissions": []
 }
