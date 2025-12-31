@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v2.4.0</title>
+  <title>Bulk Crop Pro | v2.5.2</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -139,27 +139,41 @@
           id: Math.random().toString(36).substr(2, 9),
           url: URL.createObjectURL(f),
           name: f.name,
-          cropped: null
+          cropped: null,
+          lastCrop: null,
+          lastAspect: undefined,
+          lastBg: '#ffffff'
         }));
         setImages(prev => [...prev, ...newImgs]);
       }, []);
 
       useEffect(() => {
-        if (editingIdx !== null) document.body.classList.add('editor-open');
-        else document.body.classList.remove('editor-open');
-      }, [editingIdx]);
+        if (editingIdx !== null) {
+          document.body.classList.add('editor-open');
+          const currentImg = images[editingIdx];
+          if (currentImg.lastCrop) {
+            setCrop(currentImg.lastCrop);
+            setAspect(currentImg.lastAspect);
+            setBgColor(currentImg.lastBg || '#ffffff');
+          }
+        } else {
+          document.body.classList.remove('editor-open');
+        }
+      }, [editingIdx, images]);
 
       const onImageLoad = (e) => {
         const { width, height } = e.currentTarget;
         imgRef.current = e.currentTarget;
         
-        // יצירת מסגרת ברירת מחדל של 90% מהתמונה
-        const initialCrop = centerCrop(
-          makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height),
-          width,
-          height
-        );
-        setCrop(initialCrop);
+        // טעינת הגדרות קודמות אם קיימות, אחרת יצירת ברירת מחדל
+        if (!images[editingIdx]?.lastCrop) {
+          const initialCrop = centerCrop(
+            makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height),
+            width,
+            height
+          );
+          setCrop(initialCrop);
+        }
       };
 
       const handleAspectChange = (newAspect) => {
@@ -175,37 +189,49 @@
         }
       };
 
-      // מנוע חיתוך אבסולוטי - Absolute Pixel Mapping
+      // מנוע חיתוך אבסולוטי משופר - Precise Absolute Pixel Mapping
       const generateBlob = async (imageSrc, percentCrop, currentBg) => {
+        if (!percentCrop || !percentCrop.width || !percentCrop.height) return null;
+        
         return new Promise((resolve) => {
           const temp = new Image();
+          temp.crossOrigin = "anonymous";
           temp.onload = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            // המרה מאחוזים לפיקסלים מוחלטים של הקובץ המקורי
+            // המרה מאחוזים לפיקסלים מוחלטים של הקובץ המקורי (Natural resolution)
             const nw = temp.naturalWidth;
             const nh = temp.naturalHeight;
 
-            const pxX = (percentCrop.x * nw) / 100;
-            const pxY = (percentCrop.y * nh) / 100;
-            const pxW = (percentCrop.width * nw) / 100;
-            const pxH = (percentCrop.height * nh) / 100;
+            const pxX = Math.round((percentCrop.x * nw) / 100);
+            const pxY = Math.round((percentCrop.y * nh) / 100);
+            const pxW = Math.round((percentCrop.width * nw) / 100);
+            const pxH = Math.round((percentCrop.height * nh) / 100);
 
-            canvas.width = pxW;
-            canvas.height = pxH;
+            // וידוא שהמימדים תקינים
+            canvas.width = Math.max(1, pxW);
+            canvas.height = Math.max(1, pxH);
 
-            ctx.fillStyle = currentBg;
+            // מילוי רקע
+            ctx.fillStyle = currentBg || '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
 
-            ctx.drawImage(temp, pxX, pxY, pxW, pxH, 0, 0, pxW, pxH);
+            // ציור החלק הנבחר בדיוק לפי פיקסלים
+            ctx.drawImage(
+              temp, 
+              pxX, pxY, pxW, pxH, // מקור
+              0, 0, canvas.width, canvas.height // יעד
+            );
 
             canvas.toBlob((blob) => {
-              resolve(URL.createObjectURL(blob));
+              resolve(blob ? URL.createObjectURL(blob) : null);
             }, 'image/jpeg', 0.95);
           };
+          temp.onerror = () => resolve(null);
           temp.src = imageSrc;
         });
       };
@@ -215,9 +241,17 @@
         setIsProcessing(true);
         const croppedUrl = await generateBlob(images[editingIdx].url, crop, bgColor);
         
-        setImages(prev => prev.map((img, i) => 
-          i === editingIdx ? { ...img, cropped: croppedUrl } : img
-        ));
+        if (croppedUrl) {
+          setImages(prev => prev.map((img, i) => 
+            i === editingIdx ? { 
+              ...img, 
+              cropped: croppedUrl, 
+              lastCrop: crop, 
+              lastAspect: aspect, 
+              lastBg: bgColor 
+            } : img
+          ));
+        }
         
         setIsProcessing(false);
         setEditingIdx(null);
@@ -228,10 +262,17 @@
         setIsProcessing(true);
         const currentPercentCrop = { ...crop };
         const currentBg = bgColor;
+        const currentAspect = aspect;
 
         const updated = await Promise.all(images.map(async (img) => {
           const newUrl = await generateBlob(img.url, currentPercentCrop, currentBg);
-          return { ...img, cropped: newUrl };
+          return { 
+            ...img, 
+            cropped: newUrl, 
+            lastCrop: currentPercentCrop, 
+            lastAspect: currentAspect, 
+            lastBg: currentBg 
+          };
         }));
 
         setImages(updated);
@@ -239,13 +280,18 @@
         alert('החיתוך הוחל על כל התמונות בהצלחה!');
       };
 
+      const downloadSingle = (img) => {
+        if (!img.cropped) return;
+        const link = document.createElement('a');
+        link.href = img.cropped;
+        link.download = `CROP_${img.name.split('.')[0]}.jpg`;
+        link.click();
+      };
+
       const downloadAll = async () => {
         for (const img of images) {
           if (!img.cropped) continue;
-          const link = document.createElement('a');
-          link.href = img.cropped;
-          link.download = `CROP_${img.name.split('.')[0]}.jpg`;
-          link.click();
+          downloadSingle(img);
           await new Promise(r => setTimeout(r, 450));
         }
       };
@@ -300,11 +346,27 @@
                 {images.map((img, idx) => (
                   <div key={img.id} onClick={() => setEditingIdx(idx)} className={`img-grid-item group ${img.cropped ? 'done' : ''}`}>
                     <img src={img.cropped || img.url} className={`w-full h-full object-cover transition-all ${!img.cropped ? 'opacity-60 grayscale' : ''}`} />
-                    {img.cropped && <div className="absolute top-3 right-3 bg-emerald-500 text-white rounded-full p-1.5 shadow-lg border-2 border-white"><Check size={14} strokeWidth={4}/></div>}
+                    
+                    {img.cropped && (
+                      <>
+                        <div className="absolute top-3 right-3 bg-emerald-500 text-white rounded-full p-1.5 shadow-lg border-2 border-white z-10">
+                          <Check size={14} strokeWidth={4}/>
+                        </div>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); downloadSingle(img); }}
+                          className="absolute top-3 left-3 bg-white text-indigo-600 p-2 rounded-xl shadow-lg hover:bg-indigo-50 transition-colors z-20"
+                          title="הורדת קובץ זה"
+                        >
+                          <Download size={16}/>
+                        </button>
+                      </>
+                    )}
+
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                        <span className="bg-white text-slate-900 px-4 py-2 rounded-xl font-black text-xs">עריכה</span>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); setImages(images.filter(i => i.id !== img.id)); }} className="absolute bottom-3 left-3 bg-white/20 hover:bg-red-500 text-white p-2 rounded-xl transition-colors">
+                    
+                    <button onClick={(e) => { e.stopPropagation(); setImages(images.filter(i => i.id !== img.id)); }} className="absolute bottom-3 left-3 bg-white/20 hover:bg-red-500 text-white p-2 rounded-xl transition-colors z-20">
                       <Trash2 size={16}/>
                     </button>
                   </div>
@@ -334,6 +396,7 @@
                     onChange={c => setCrop(c)} 
                     aspect={aspect}
                     keepSelection
+                    unit="%"
                   >
                     <img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false}/>
                   </ReactCrop>
@@ -359,7 +422,7 @@
                       <button onClick={()=>setZoom(z=>Math.min(3,z+0.25))} className="p-2 text-white/40 hover:text-white"><ZoomIn size={20}/></button>
                     </div>
                     <div className="bg-white/5 p-2 rounded-2xl border border-white/10 flex items-center">
-                      <input type="color" value={bgColor} onChange={e=>setBgColor(e.target.value)} className="w-6 h-6 bg-transparent border-0 cursor-pointer rounded-md"/>
+                      <input type="color" value={bgColor} onChange={e=>setBgColor(e.target.value)} className="w-6 h-6 bg-transparent border-0 cursor-pointer rounded-md" title="צבע רקע"/>
                     </div>
                     <button onClick={handleApplyAll} className="text-indigo-400 font-black text-xs px-4 hover:bg-indigo-500/10 py-2 rounded-xl transition-all">החל על הכל</button>
                   </div>
@@ -377,7 +440,7 @@
             </div>
           )}
           
-          <footer className="py-10 text-center text-[10px] font-black text-slate-300 uppercase tracking-[0.3em] mt-auto">Bulk Crop Pro • Precision 2.4.0</footer>
+          <footer className="py-10 text-center text-[10px] font-black text-slate-300 uppercase tracking-[0.3em] mt-auto">Bulk Crop Pro • Precision 2.5.2</footer>
         </div>
       );
     };

@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v2.4.0 - חיתוך אבסולוטי מדויק עם תיקוני ממשק קריטיים וביצועים משופרים.",
+  "description": "v2.5.2 - תיקון קריטי למנוע החיתוך (High-Res Precision), שמירת הגדרות עריכה חוזרת והוספת הורדה בודדת.",
   "requestFramePermissions": []
 }

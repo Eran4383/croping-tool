@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v2.4.0</title>
+  <title>Bulk Crop Pro | v2.5.2</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,9 +23,10 @@
     .image-viewport img { max-width: 100%; max-height: 70vh; display: block; }
     .editor-footer { background: #0f172a; padding: 16px 24px; display: flex; flex-direction: column; gap: 16px; border-top: 1px solid rgba(255,255,255,0.1); }
     @media (min-width: 768px) { .editor-footer { flex-direction: row; justify-content: space-between; align-items: center; padding: 24px 40px; } }
-    .btn-aspect { padding: 10px 18px; background: rgba(255,255,255,0.05); color: #94a3b8; border-radius: 12px; font-size: 13px; font-weight: 800; border: 1px solid rgba(255,255,255,0.1); }
+    .btn-aspect { padding: 10px 18px; background: rgba(255,255,255,0.05); color: #94a3b8; border-radius: 12px; font-size: 13px; font-weight: 800; border: 1px solid rgba(255,255,255,0.1); transition: all 0.2s; }
     .btn-aspect.active { background: var(--primary); color: white; border-color: var(--primary); }
     .img-grid-item { position: relative; aspect-ratio: 1/1; border-radius: 24px; overflow: hidden; background: white; border: 2px solid transparent; transition: all 0.3s ease; }
+    .img-grid-item.done { border-color: var(--accent); }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .loader-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; }
   </style>
@@ -46,7 +47,7 @@
   <script type="text/babel" data-type="module" data-presets="react,typescript">
     import React, { useState, useEffect, useRef, useCallback } from 'react';
     import { createRoot } from 'react-dom/client';
-    import { Upload, Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, Copy, ImageIcon, ZoomIn, ZoomOut, Loader2, Trash2 } from 'lucide-react';
+    import { Upload, Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, Copy, ImageIcon, ZoomIn, ZoomOut, Loader2, Trash2, Palette } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 
     const App = () => {
@@ -65,48 +66,59 @@
           id: Math.random().toString(36).substr(2, 9),
           url: URL.createObjectURL(f),
           name: f.name,
-          cropped: null
+          cropped: null,
+          lastCrop: null,
+          lastAspect: undefined,
+          lastBg: '#ffffff'
         }));
         setImages(prev => [...prev, ...newImgs]);
       }, []);
 
       useEffect(() => {
-        if (editingIdx !== null) document.body.classList.add('editor-open');
-        else document.body.classList.remove('editor-open');
-      }, [editingIdx]);
+        if (editingIdx !== null) {
+          const currentImg = images[editingIdx];
+          if (currentImg.lastCrop) {
+            setCrop(currentImg.lastCrop);
+            setAspect(currentImg.lastAspect);
+            setBgColor(currentImg.lastBg || '#ffffff');
+          }
+        }
+      }, [editingIdx, images]);
 
       const onImageLoad = (e) => {
         const { width, height } = e.currentTarget;
         imgRef.current = e.currentTarget;
-        const initialCrop = centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height), width, height);
-        setCrop(initialCrop);
+        if (!images[editingIdx]?.lastCrop) {
+          setCrop(centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height), width, height));
+        }
       };
 
-      const handleAspectChange = (newAspect) => {
-        setAspect(newAspect);
+      const handleAspectChange = (val) => {
+        setAspect(val);
         if (imgRef.current) {
           const { width, height } = imgRef.current;
-          const newCrop = centerCrop(makeAspectCrop({ unit: '%', width: 90 }, newAspect, width, height), width, height);
-          setCrop(newCrop);
+          setCrop(centerCrop(makeAspectCrop({ unit: '%', width: 90 }, val, width, height), width, height));
         }
       };
 
       const generateBlob = async (imageSrc, percentCrop, currentBg) => {
+        if (!percentCrop || !percentCrop.width) return null;
         return new Promise((resolve) => {
           const temp = new Image();
+          temp.crossOrigin = "anonymous";
           temp.onload = () => {
             const canvas = document.createElement('canvas');
-            const nw = temp.naturalWidth;
-            const nh = temp.naturalHeight;
-            const pxX = (percentCrop.x * nw) / 100;
-            const pxY = (percentCrop.y * nh) / 100;
-            const pxW = (percentCrop.width * nw) / 100;
-            const pxH = (percentCrop.height * nh) / 100;
-            canvas.width = pxW; canvas.height = pxH;
+            const nw = temp.naturalWidth; const nh = temp.naturalHeight;
+            const pxX = Math.round((percentCrop.x * nw) / 100);
+            const pxY = Math.round((percentCrop.y * nh) / 100);
+            const pxW = Math.round((percentCrop.width * nw) / 100);
+            const pxH = Math.round((percentCrop.height * nh) / 100);
+            canvas.width = Math.max(1, pxW); canvas.height = Math.max(1, pxH);
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = currentBg; ctx.fillRect(0,0,pxW,pxH);
-            ctx.drawImage(temp, pxX, pxY, pxW, pxH, 0, 0, pxW, pxH);
-            canvas.toBlob((blob) => resolve(URL.createObjectURL(blob)), 'image/jpeg', 0.95);
+            ctx.fillStyle = currentBg; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(temp, pxX, pxY, pxW, pxH, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => resolve(blob ? URL.createObjectURL(blob) : null), 'image/jpeg', 0.95);
           };
           temp.src = imageSrc;
         });
@@ -116,30 +128,30 @@
         if (!crop || editingIdx === null) return;
         setIsProcessing(true);
         const croppedUrl = await generateBlob(images[editingIdx].url, crop, bgColor);
-        setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropped: croppedUrl } : img));
-        setIsProcessing(false);
-        setEditingIdx(null);
+        if (croppedUrl) {
+          setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropped: croppedUrl, lastCrop: crop, lastAspect: aspect, lastBg: bgColor } : img));
+        }
+        setIsProcessing(false); setEditingIdx(null);
       };
 
       const handleApplyAll = async () => {
         if (!crop) return;
         setIsProcessing(true);
-        const currentPercentCrop = { ...crop };
+        const currentCrop = { ...crop }; const currentBg = bgColor; const currentAspect = aspect;
         const updated = await Promise.all(images.map(async (img) => {
-          const newUrl = await generateBlob(img.url, currentPercentCrop, bgColor);
-          return { ...img, cropped: newUrl };
+          const newUrl = await generateBlob(img.url, currentCrop, currentBg);
+          return { ...img, cropped: newUrl, lastCrop: currentCrop, lastAspect: currentAspect, lastBg: currentBg };
         }));
-        setImages(updated);
-        setIsProcessing(false);
-        alert('החיתוך הוחל על כולם!');
+        setImages(updated); setIsProcessing(false); alert('החיתוך הוחל על כולם!');
+      };
+
+      const downloadSingle = (img) => {
+        if (!img.cropped) return;
+        const link = document.createElement('a'); link.href = img.cropped; link.download = `CROP_${img.name.split('.')[0]}.jpg`; link.click();
       };
 
       const downloadAll = async () => {
-        for (const img of images) {
-          if (!img.cropped) continue;
-          const link = document.createElement('a'); link.href = img.cropped; link.download = `CROP_${img.name}.jpg`; link.click();
-          await new Promise(r => setTimeout(r, 450));
-        }
+        for (const img of images) { if (img.cropped) { downloadSingle(img); await new Promise(r => setTimeout(r, 450)); } }
       };
 
       return (
@@ -158,16 +170,20 @@
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                 {images.map((img, idx) => (
-                  <div key={img.id} onClick={() => setEditingIdx(idx)} className={`img-grid-item group ${img.cropped ? 'done' : ''}`}><img src={img.cropped || img.url} className="w-full h-full object-cover" /></div>
+                  <div key={img.id} onClick={() => setEditingIdx(idx)} className={`img-grid-item group ${img.cropped ? 'done' : ''}`}>
+                    <img src={img.cropped || img.url} className="w-full h-full object-cover" />
+                    {img.cropped && <><div className="absolute top-3 right-3 bg-emerald-500 text-white rounded-full p-1.5 z-10"><Check size={14} strokeWidth={4}/></div><button onClick={(e) => { e.stopPropagation(); downloadSingle(img); }} className="absolute top-3 left-3 bg-white text-indigo-600 p-2 rounded-xl shadow-lg z-20"><Download size={16}/></button></>}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><span className="bg-white text-slate-900 px-4 py-2 rounded-xl font-black text-xs uppercase">עריכה</span></div>
+                  </div>
                 ))}
-                <div onClick={() => fileInputRef.current.click()} className="img-grid-item border-4 border-dashed border-slate-200 flex items-center justify-center text-slate-300"><Plus size={48}/></div>
+                <div onClick={() => fileInputRef.current.click()} className="img-grid-item border-4 border-dashed border-slate-200 flex items-center justify-center text-slate-300 cursor-pointer"><Plus size={48}/></div>
               </div>
             )}
           </main>
           {editingIdx !== null && (
             <div className="editor-overlay ltr-force">
               <header className="h-16 px-6 bg-slate-950/50 flex justify-between items-center"><span className="text-white/60 font-black text-[10px]">תמונה {editingIdx+1}/{images.length}</span><button onClick={() => setEditingIdx(null)} className="text-white/40"><X size={32}/></button></header>
-              <div className="image-viewport"><ReactCrop crop={crop} onChange={c => setCrop(c)} aspect={aspect} keepSelection><img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false}/></ReactCrop></div>
+              <div className="image-viewport"><ReactCrop crop={crop} onChange={c => setCrop(c)} aspect={aspect} keepSelection unit="%"><img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false}/></ReactCrop></div>
               <div className="editor-footer ltr-force" style={{ direction: 'rtl' }}>
                 <div className="flex gap-2 overflow-x-auto no-scrollbar">{[{l:'חופשי',v:undefined},{l:'1:1',v:1},{l:'16:9',v:16/9},{l:'9:16',v:9/16}].map(a=>(<button key={a.l} onClick={()=>handleAspectChange(a.v)} className={`btn-aspect ${aspect===a.v?'active':''}`}>{a.l}</button>))}</div>
                 <div className="flex justify-between items-center">
