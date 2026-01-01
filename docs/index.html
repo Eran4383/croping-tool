@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.7.4</title>
+  <title>Bulk Crop Pro | v3.7.9</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,37 +13,26 @@
   <link rel="stylesheet" href="https://unpkg.com/react-image-crop/dist/ReactCrop.css" />
   <style>
     :root { --primary: #4f46e5; --accent: #10b981; }
-    body { 
-      font-family: 'Assistant', sans-serif; 
-      background: #f1f5f9; 
-      color: #0f172a; 
-      margin: 0; 
-      overflow: hidden; 
-      -webkit-tap-highlight-color: transparent; 
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-    }
-    body::-webkit-scrollbar { display: none; }
-    body.editor-open { overflow: hidden; height: 100vh; position: fixed; width: 100%; }
+    * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+    *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+    body { font-family: 'Assistant', sans-serif; background: #f1f5f9; color: #0f172a; margin: 0; overflow: hidden !important; -webkit-tap-highlight-color: transparent; }
+    body.editor-open { overflow: hidden !important; height: 100vh; position: fixed; width: 100%; }
     .ltr-force { direction: ltr !important; }
-    .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; }
-    .image-viewport { flex: 1; overflow: hidden; background: #0a0a0a; touch-action: none; position: relative; overscroll-behavior: contain; display: flex; align-items: center; justify-content: center; }
-    .image-container { padding: 300px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transform-origin: center center; }
+    .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; overflow: hidden; }
+    .image-viewport { flex: 1; overflow: hidden; background: #0a0a0a; touch-action: none; position: relative; overscroll-behavior: contain; display: block; }
+    .image-container { padding: 2000px; display: inline-flex; align-items: center; justify-content: center; min-width: 100%; min-height: 100%; }
     .crop-target-img { display: block; user-select: none; transition: none !important; will-change: width, height; max-width: none !important; }
     .ReactCrop { direction: ltr !important; display: inline-block; transition: none !important; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
     .is-pinching .ReactCrop__crop-selection, .is-pinching .ReactCrop__drag-elements, .is-pinching .ReactCrop__interaction-layer { pointer-events: none !important; }
-    .editor-footer { background: #111827; padding: 12px; border-top: 1px solid #374151; z-index: 10000; overflow: hidden; }
+    .editor-footer { background: #111827; padding: 12px; border-top: 1px solid #374151; z-index: 10000; overflow: hidden !important; flex-shrink: 0; }
     @media (min-width: 768px) { .editor-footer { padding: 16px 40px; } }
     .aspect-chip { padding: 8px 16px; background: #1f2937; color: #9ca3af; border-radius: 10px; font-size: 13px; font-weight: 700; border: 1px solid #374151; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
     .aspect-chip.active { background: var(--primary); color: white; border-color: var(--primary); }
     .img-grid-item { position: relative; aspect-ratio: 1/1; border-radius: 20px; overflow: hidden; background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); cursor: pointer; border: 2px solid transparent; transition: transform 0.2s; }
-    .img-grid-item:hover { transform: translateY(-2px); }
     .img-grid-item.done { border-color: var(--accent); }
-    .loading-spinner { animation: spin 1s linear infinite; }
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .aspect-row-scroll { display: flex; gap: 0.5rem; overflow-x: auto; flex-wrap: nowrap; width: 100%; }
+    .aspect-row-scroll::-webkit-scrollbar { display: none; }
   </style>
   <script type="importmap">
 {
@@ -65,7 +54,8 @@
     import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2, Maximize, RotateCcw } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 
-    const VERSION = "v3.7.4";
+    const VERSION = "v3.7.9";
+    const PADDING = 2000;
 
     const App = () => {
       const [images, setImages] = useState([]);
@@ -81,131 +71,49 @@
       const fileInputRef = useRef(null);
       const viewportRef = useRef(null);
       const containerRef = useRef(null);
-      const zoomState = useRef({ lastZoom: 1, anchorX: 0, anchorY: 0, viewX: 0, viewY: 0, touchStartDist: 0, touchStartZoom: 1, isPinching: false });
+      const zoomState = useRef({ lastZoom: 1, anchorX: 0, anchorY: 0, viewX: 0, viewY: 0, touchStartDist: 0, touchStartZoom: 1, isPinching: false, isDragging: false });
 
       const applyZoomScroll = useCallback((currentZoom, anchorX, anchorY, viewX, viewY) => {
         if (!viewportRef.current) return;
-        viewportRef.current.scrollLeft = (anchorX * currentZoom) - viewX;
-        viewportRef.current.scrollTop = (anchorY * currentZoom) - viewY;
+        viewportRef.current.scrollLeft = PADDING + (anchorX * currentZoom) - viewX;
+        viewportRef.current.scrollTop = PADDING + (anchorY * currentZoom) - viewY;
       }, []);
 
-      const updateZoomAnchor = useCallback((targetCenter = false) => {
+      const updateZoomAnchor = useCallback(() => {
         if (!viewportRef.current || !imgRef.current) return;
-        const PADDING = 300;
         const viewport = viewportRef.current;
-        let targetX, targetY;
         const viewPosX = viewport.clientWidth / 2;
         const viewPosY = viewport.clientHeight / 2;
-        if (!targetCenter && completedCrop && completedCrop.width > 5 && completedCrop.height > 5) {
-          targetX = (completedCrop.x + completedCrop.width / 2) * zoom + PADDING;
-          targetY = (completedCrop.y + completedCrop.height / 2) * zoom + PADDING;
-        } else {
-          targetX = (imgRef.current.width / 2) + PADDING;
-          targetY = (imgRef.current.height / 2) + PADDING;
-        }
-        zoomState.current.viewX = viewPosX; zoomState.current.viewY = viewPosY;
-        zoomState.current.anchorX = targetX / zoom; zoomState.current.anchorY = targetY / zoom;
-      }, [zoom, completedCrop]);
-
-      const handleAddImages = useCallback((files) => {
-        if (!files || files.length === 0) return;
-        const newImgs = Array.from(files).filter(f => f.type.startsWith('image/')).map(f => ({
-          id: Math.random().toString(36).substr(2, 9), url: URL.createObjectURL(f), name: f.name || `Image`, cropped: null, cropConfig: null
-        }));
-        setImages(prev => [...prev, ...newImgs]);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }, []);
-
-      useEffect(() => {
-        const handlePaste = (e) => {
-          const items = e.clipboardData?.items; if (!items) return;
-          const files = []; for (const item of items) { if (item.type.indexOf('image') !== -1) { const file = item.getAsFile(); if (file) files.push(file); } }
-          if (files.length > 0) handleAddImages(files);
-        };
-        window.addEventListener('paste', handlePaste); return () => window.removeEventListener('paste', handlePaste);
-      }, [handleAddImages]);
+        zoomState.current.viewX = viewPosX;
+        zoomState.current.viewY = viewPosY;
+        zoomState.current.anchorX = (viewport.scrollLeft + viewPosX - PADDING) / zoom;
+        zoomState.current.anchorY = (viewport.scrollTop + viewPosY - PADDING) / zoom;
+      }, [zoom]);
 
       const fitToViewport = useCallback(() => {
         if (!viewportRef.current || !imgRef.current) return;
-        const viewport = viewportRef.current;
-        const vw = viewport.clientWidth - 80;
-        const vh = viewport.clientHeight - 80;
-        const ratio = Math.min(vw / imgRef.current.naturalWidth, vh / imgRef.current.naturalHeight);
+        const ratio = Math.min((viewportRef.current.clientWidth - 40) / imgRef.current.naturalWidth, (viewportRef.current.clientHeight - 40) / imgRef.current.naturalHeight);
         setZoom(ratio); zoomState.current.lastZoom = ratio;
+        const zw = imgRef.current.naturalWidth * ratio;
+        const zh = imgRef.current.naturalHeight * ratio;
         requestAnimationFrame(() => {
-           if (viewportRef.current && imgRef.current) {
-             const PADDING = 300;
-             viewportRef.current.scrollLeft = (imgRef.current.width / 2 + PADDING) - (viewportRef.current.clientWidth / 2);
-             viewportRef.current.scrollTop = (imgRef.current.height / 2 + PADDING) - (viewportRef.current.clientHeight / 2);
+           if (viewportRef.current) {
+             viewportRef.current.scrollLeft = (zw / 2 + PADDING) - (viewportRef.current.clientWidth / 2);
+             viewportRef.current.scrollTop = (zh / 2 + PADDING) - (viewportRef.current.clientHeight / 2);
            }
         });
       }, []);
 
-      const currentOriginalAspect = imgRef.current ? imgRef.current.naturalWidth / imgRef.current.naturalHeight : undefined;
-
-      const onAspectChange = (newAspect) => {
-        setAspect(newAspect);
-        if (imgRef.current) {
-          const { width, height } = imgRef.current;
-          let newCrop;
-          if (newAspect === undefined || Math.abs(newAspect - currentOriginalAspect) < 0.001) {
-            newCrop = { unit: '%', x: 0, y: 0, width: 100, height: 100 };
-          } else {
-            newCrop = centerCrop(makeAspectCrop({ unit: '%', width: 100 }, newAspect, width, height), width, height);
-          }
-          setCrop(newCrop);
-          setTimeout(() => updateZoomAnchor(false), 50);
+      const navigateTo = useCallback((newIdx) => {
+        if (editingIdx !== null && crop) {
+          setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropConfig: { crop: { ...crop }, aspect } } : img));
         }
-      };
+        setEditingIdx(newIdx);
+      }, [editingIdx, crop, aspect]);
 
-      useLayoutEffect(() => {
-        if (!viewportRef.current) return;
-        if (zoom !== zoomState.current.lastZoom) {
-          applyZoomScroll(zoom, zoomState.current.anchorX, zoomState.current.anchorY, zoomState.current.viewX, zoomState.current.viewY);
-        }
-        zoomState.current.lastZoom = zoom;
-      }, [zoom, applyZoomScroll]);
-
-      useEffect(() => {
-        if (editingIdx !== null) { 
-          document.body.classList.add('editor-open'); 
-          setIsPanMode(false); 
-          const currentImg = images[editingIdx]; 
-          if (currentImg.cropConfig) { setCrop(currentImg.cropConfig.crop); setAspect(currentImg.cropConfig.aspect); } 
-          else { setAspect(undefined); setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 }); }
-          setTimeout(fitToViewport, 100);
-        }
-        else document.body.classList.remove('editor-open');
-      }, [editingIdx, images, fitToViewport]);
-
-      const onImageLoad = (e) => { imgRef.current = e.currentTarget; fitToViewport(); setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 }); };
-
-      const handleTouchStart = (e) => {
-        if (e.touches.length === 2) {
-          setIsPinching(true); zoomState.current.isPinching = true;
-          const rect = viewportRef.current.getBoundingClientRect();
-          const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-          const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-          zoomState.current.touchStartDist = dist; zoomState.current.touchStartZoom = zoom;
-          zoomState.current.viewX = midX; zoomState.current.viewY = midY;
-          zoomState.current.anchorX = (viewportRef.current.scrollLeft + midX) / zoom;
-          zoomState.current.anchorY = (viewportRef.current.scrollTop + midY) / zoom;
-        }
-      };
-
-      const handleTouchMove = (e) => {
-        if (e.touches.length === 2 && zoomState.current.isPinching) {
-          e.preventDefault();
-          const rect = viewportRef.current.getBoundingClientRect();
-          const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-          const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-          const newZoom = Math.min(20, Math.max(0.001, zoomState.current.touchStartZoom * (dist / zoomState.current.touchStartDist)));
-          setZoom(newZoom);
-          applyZoomScroll(newZoom, zoomState.current.anchorX, zoomState.current.anchorY, midX, midY);
-          zoomState.current.viewX = midX; zoomState.current.viewY = midY;
-        }
+      const handleZoomAction = (factor) => {
+        updateZoomAnchor();
+        setZoom(z => Math.min(20, Math.max(0.001, z * factor)));
       };
 
       const handleSave = async () => {
@@ -213,51 +121,43 @@
         setIsProcessing(true); const image = imgRef.current; const canvas = document.createElement('canvas'); const scaleX = image.naturalWidth / image.width; const scaleY = image.naturalHeight / image.height; canvas.width = Math.ceil(completedCrop.width * scaleX); canvas.height = Math.ceil(completedCrop.height * scaleY); const ctx = canvas.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(image, completedCrop.x * scaleX, completedCrop.y * scaleY, completedCrop.width * scaleX, completedCrop.height * scaleY, 0, 0, canvas.width, canvas.height); const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95)); setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropped: URL.createObjectURL(blob), cropConfig: { crop: { ...crop }, aspect } } : img)); setIsProcessing(false); setEditingIdx(null);
       };
 
+      useLayoutEffect(() => {
+        if (!viewportRef.current) return;
+        if (Math.abs(zoom - zoomState.current.lastZoom) > 0.0001) {
+          applyZoomScroll(zoom, zoomState.current.anchorX, zoomState.current.anchorY, zoomState.current.viewX, zoomState.current.viewY);
+        }
+        zoomState.current.lastZoom = zoom;
+      }, [zoom, applyZoomScroll]);
+
       return (
         <div className="min-h-screen flex flex-col ltr-force overflow-hidden">
           <header className="h-16 bg-white border-b px-6 flex items-center justify-between sticky top-0 z-40" style={{ direction: 'rtl' }}>
-            <div className="flex items-center gap-3">
-              <Scissors className="text-indigo-600" size={24}/>
-              <h1 className="font-extrabold text-lg flex items-center gap-2">
-                Bulk Crop Pro
-                <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md border border-slate-200">{VERSION}</span>
-              </h1>
-            </div>
-            {images.length > 0 && <button onClick={() => { images.forEach(img => { if (img.cropped) { const l = document.createElement('a'); l.href = img.cropped; l.download = `CROP_${img.name}.jpg`; l.click(); }}); }} className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-lg">הורד הכל</button>}
+            <div className="flex items-center gap-3"><Scissors className="text-indigo-600" size={24}/><h1 className="font-extrabold text-lg flex items-center gap-2">Bulk Crop Pro<span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md border border-slate-200">{VERSION}</span></h1></div>
+            {images.length > 0 && <button title="הורדת כל התמונות החתוכות" onClick={() => { images.forEach(img => { if (img.cropped) { const l = document.createElement('a'); l.href = img.cropped; l.download = `CROP_${img.name}.jpg`; l.click(); }}); }} className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-lg">הורד הכל</button>}
           </header>
           <main className="flex-1 p-5 md:p-10 max-w-6xl mx-auto w-full overflow-y-auto no-scrollbar" style={{ direction: 'rtl' }}>
-            {images.length === 0 ? <div onClick={() => fileInputRef.current.click()} className="min-h-[40vh] bg-white border-4 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center cursor-pointer"><Plus size={48} className="text-indigo-600 mb-4"/><h2 className="text-xl font-bold">העלאת תמונות</h2></div> : <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 pb-20">{images.map((img, idx) => (<div key={img.id} onClick={() => setEditingIdx(idx)} className={`img-grid-item ${img.cropped ? 'done' : ''}`}><img src={img.cropped || img.url} className="w-full h-full object-cover" /></div>))}<div onClick={() => fileInputRef.current.click()} className="img-grid-item border-4 border-dashed border-slate-200 flex items-center justify-center text-slate-300"><Plus size={32}/></div></div>}
+             {images.length === 0 ? <div title="לחץ להעלאת תמונות" onClick={() => fileInputRef.current.click()} className="min-h-[40vh] bg-white border-4 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center cursor-pointer"><Plus size={48} className="text-indigo-600 mb-4"/><h2 className="text-xl font-bold">העלאת תמונות</h2></div> : <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 pb-20">{images.map((img, idx) => (<div key={img.id} title={`ערוך תמונה: ${img.name}`} onClick={() => setEditingIdx(idx)} className={`img-grid-item ${img.cropped ? 'done' : ''}`}><img src={img.cropped || img.url} className="w-full h-full object-cover" /></div>))}<div onClick={() => fileInputRef.current.click()} className="img-grid-item border-4 border-dashed border-slate-200 flex items-center justify-center text-slate-300"><Plus size={32}/></div></div>}
           </main>
-          <input type="file" ref={fileInputRef} multiple accept="image/*" className="hidden" onChange={e => handleAddImages(e.target.files)} />
           {editingIdx !== null && (
-            <div className={`editor-overlay ltr-force ${isPinching ? 'is-pinching' : ''}`}>
-              <div className="flex items-center justify-between px-6 h-14 bg-black/60 shrink-0 backdrop-blur-md">
-                <div className="flex items-center gap-4"><span className="text-white/80 font-black text-sm">{editingIdx + 1} / {images.length}</span><div className="flex items-center bg-white/10 p-1 rounded-2xl"><button onClick={() => setIsPanMode(false)} className={`p-2 rounded-xl ${!isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><MousePointer2 size={18}/></button><button onClick={() => setIsPanMode(true)} className={`p-2 rounded-xl ${isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><Move size={18}/></button></div></div>
-                <button onClick={() => setEditingIdx(null)} className="text-white/50 p-2"><X size={32}/></button>
+            <div className="editor-overlay ltr-force">
+              <div className="flex items-center justify-between px-6 h-14 bg-black/60 shrink-0">
+                <div className="flex items-center gap-4"><span className="text-white/80 font-black text-sm">{editingIdx + 1} / {images.length}</span><div className="flex items-center bg-white/10 p-1 rounded-2xl"><button title="עריכה" onClick={() => setIsPanMode(false)} className={`p-2 rounded-xl ${!isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><MousePointer2 size={18}/></button><button title="הזזה" onClick={() => setIsPanMode(true)} className={`p-2 rounded-xl ${isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><Move size={18}/></button></div></div>
+                <button title="סגור" onClick={() => navigateTo(null)} className="text-white/50 p-2"><X size={32}/></button>
               </div>
-              <div className="image-viewport no-scrollbar" ref={viewportRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={() => { zoomState.current.isPinching = false; setIsPinching(false); }} onWheel={(e) => { e.preventDefault(); updateZoomAnchor(false); setZoom(z => Math.min(20, Math.max(0.001, z * (e.deltaY > 0 ? 0.9 : 1.1)))); }}>
-                <div className="image-container"><ReactCrop crop={crop} onChange={(c) => setCrop(c)} onComplete={(c) => setCompletedCrop(c)} aspect={aspect} disabled={isPanMode || isPinching}><img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false} className="crop-target-img shadow-2xl" style={{ width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto', height: imgRef.current ? `${imgRef.current.naturalHeight * zoom}px` : 'auto' }} /></ReactCrop></div>
+              <div className="image-viewport no-scrollbar" ref={viewportRef}>
+                <div className="image-container no-scrollbar"><ReactCrop crop={crop} onChange={(c) => setCrop(c)} onComplete={(c) => setCompletedCrop(c)} aspect={aspect} disabled={isPanMode}><img ref={imgRef} src={images[editingIdx].url} onLoad={fitToViewport} draggable={false} className="crop-target-img shadow-2xl" style={{ width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto', height: imgRef.current ? `${imgRef.current.naturalHeight * zoom}px` : 'auto' }} /></ReactCrop></div>
               </div>
               <div className="editor-footer no-scrollbar" style={{ direction: 'rtl' }}>
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-between max-w-6xl mx-auto">
-                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar flex-nowrap justify-start md:justify-start w-full md:w-auto pb-1">
-                     {[
-                       {l:'חופשי',v:undefined},
-                       {l:<RotateCcw size={16} />,v:currentOriginalAspect},
-                       {l:'1:1',v:1},
-                       {l:'16:9',v:16/9},
-                       {l:'9:16',v:9/16},
-                       {l:'4:5',v:0.8}
-                     ].map((a, i)=>(<button key={i} onClick={()=>onAspectChange(a.v)} className={`aspect-chip flex items-center justify-center min-w-[44px] ${aspect===a.v?'active':''}`}>{a.l}</button>))}
-                  </div>
-                  <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-end flex-wrap">
-                    <div className="flex items-center gap-1 bg-white/10 p-1 rounded-2xl border border-white/5"><button onClick={()=>{updateZoomAnchor(false); setZoom(z=>Math.max(0.001,z*0.8))}} className="p-2 text-white/50"><ZoomOut size={18}/></button><button onClick={fitToViewport} className="p-2 text-white/50"><Maximize size={18}/></button><button onClick={()=>{updateZoomAnchor(false); setZoom(z=>Math.min(20,z*1.2))}} className="p-2 text-white/50"><ZoomIn size={18}/></button></div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={()=>setEditingIdx(i=>Math.max(0,i-1))} disabled={editingIdx===0} className="p-1 text-white/20"><ChevronRight size={32}/></button>
-                      <button onClick={handleSave} disabled={isProcessing} className="bg-indigo-600 text-white px-6 h-10 rounded-xl font-black min-w-[120px] text-sm shadow-lg">שמור חיתוך</button>
-                      <button onClick={()=>setEditingIdx(i=>Math.min(images.length-1,i+1))} disabled={editingIdx===images.length-1} className="p-1 text-white/20"><ChevronLeft size={32}/></button>
-                    </div>
-                  </div>
+                   <div className="aspect-row-scroll">
+                     {[ {l:'חופשי',v:undefined, t: 'חופשי'}, {l:<RotateCcw size={16} />,v:1, t: 'מקורי'}, {l:'1:1',v:1, t: 'ריבוע'}, {l:'16:9',v:16/9, t: 'רחב'}, {l:'9:16',v:9/16, t: 'סטורי'} ].map((a, i)=>(<button key={i} title={a.t} onClick={()=>setAspect(a.v)} className={`aspect-chip ${aspect===a.v?'active':''}`}>{a.l}</button>))}
+                   </div>
+                   <div className="flex items-center gap-2">
+                     <button title="הקטנה" onClick={()=>handleZoomAction(0.8)} className="p-2 text-white/50"><ZoomOut size={18}/></button>
+                     <button title="התאמה" onClick={fitToViewport} className="p-2 text-white/50"><Maximize size={18}/></button>
+                     <button title="הגדלה" onClick={()=>handleZoomAction(1.2)} className="p-2 text-white/50"><ZoomIn size={18}/></button>
+                     <button title="שמור" onClick={handleSave} className="bg-indigo-600 text-white px-6 h-10 rounded-xl font-black">שמור</button>
+                   </div>
                 </div>
               </div>
             </div>
