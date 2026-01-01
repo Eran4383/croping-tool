@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.7.1</title>
+  <title>Bulk Crop Pro | v3.7.2</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,6 +32,8 @@
     .img-grid-item.done { border-color: var(--accent); }
     .loading-spinner { animation: spin 1s linear infinite; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
   <script type="importmap">
 {
@@ -50,10 +52,10 @@
   <script type="text/babel" data-type="module" data-presets="react,typescript">
     import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
     import { createRoot } from 'react-dom/client';
-    import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2, Maximize } from 'lucide-react';
+    import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2, Maximize, RotateCcw } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 
-    const VERSION = "v3.7.1";
+    const VERSION = "v3.7.2";
 
     const App = () => {
       const [images, setImages] = useState([]);
@@ -212,15 +214,15 @@
               </div>
               <div className="editor-footer" style={{ direction: 'rtl' }}>
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-between max-w-6xl mx-auto">
-                  <div className="flex items-center gap-2 flex-wrap md:flex-nowrap justify-center md:justify-start w-full md:w-auto">
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar flex-nowrap justify-start md:justify-start w-full md:w-auto pb-1">
                      {[
                        {l:'חופשי',v:undefined},
-                       {l:'מקורי',v:currentOriginalAspect},
+                       {l:<RotateCcw size={16} />,v:currentOriginalAspect},
                        {l:'1:1',v:1},
                        {l:'16:9',v:16/9},
                        {l:'9:16',v:9/16},
                        {l:'4:5',v:0.8}
-                     ].map((a, i)=>(<button key={i} onClick={()=>onAspectChange(a.v)} className={`aspect-chip ${aspect===a.v?'active':''}`}>{a.l}</button>))}
+                     ].map((a, i)=>(<button key={i} onClick={()=>onAspectChange(a.v)} className={`aspect-chip flex items-center justify-center min-w-[44px] ${aspect===a.v?'active':''}`}>{a.l}</button>))}
                   </div>
                   <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-end flex-wrap">
                     <div className="flex items-center gap-1 bg-white/10 p-1 rounded-2xl border border-white/5"><button onClick={()=>{updateZoomAnchor(false); setZoom(z=>Math.max(0.001,z*0.8))}} className="p-2 text-white/50"><ZoomOut size={18}/></button><button onClick={fitToViewport} className="p-2 text-white/50"><Maximize size={18}/></button><button onClick={()=>{updateZoomAnchor(false); setZoom(z=>Math.min(20,z*1.2))}} className="p-2 text-white/50"><ZoomIn size={18}/></button></div>
