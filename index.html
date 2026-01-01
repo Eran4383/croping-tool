@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.6.5</title>
+  <title>Bulk Crop Pro | v3.6.6</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,7 +26,7 @@
       touch-action: none; 
       position: relative;
       overscroll-behavior: contain;
-      display: flex; /* Flex for natural centering */
+      display: flex; 
       align-items: center;
       justify-content: center;
     }
@@ -34,7 +34,7 @@
     .image-viewport.pan-mode:active { cursor: grabbing; }
     
     .image-container {
-      padding: 100px; /* Safe area around image */
+      padding: 100px; 
       flex-shrink: 0;
       display: flex;
       align-items: center;
@@ -124,7 +124,6 @@
       const applyZoomScroll = useCallback((currentZoom, anchorX, anchorY, viewX, viewY) => {
         if (!viewportRef.current) return;
         const viewport = viewportRef.current;
-        // Scroll adjustment considering flex centering
         viewport.scrollLeft = (anchorX * currentZoom) - viewX;
         viewport.scrollTop = (anchorY * currentZoom) - viewY;
       }, []);
@@ -132,16 +131,14 @@
       const updateZoomAnchor = useCallback((forceViewportCenter = false) => {
         if (!viewportRef.current || !imgRef.current || !containerRef.current) return;
         const viewport = viewportRef.current;
-        const container = containerRef.current;
         
         const viewPosX = viewport.clientWidth / 2;
         const viewPosY = viewport.clientHeight / 2;
 
         let targetX, targetY;
 
-        // Coordinates are relative to containerRef (which starts at image origin + padding)
         if (!forceViewportCenter && completedCrop && completedCrop.width > 10 && completedCrop.height > 10) {
-          targetX = (completedCrop.x + completedCrop.width / 2) * zoom + 100; // 100 is padding
+          targetX = (completedCrop.x + completedCrop.width / 2) * zoom + 100;
           targetY = (completedCrop.y + completedCrop.height / 2) * zoom + 100;
         } else {
           targetX = (imgRef.current.width / 2) + 100;
@@ -164,7 +161,7 @@
           cropConfig: null
         }));
         setImages(prev => [...prev, ...newImgs]);
-        if (fileInputRef.current) fileInputRef.current.value = ''; // Reset for re-selection
+        if (fileInputRef.current) fileInputRef.current.value = ''; 
       }, []);
 
       useEffect(() => {
@@ -195,8 +192,6 @@
         setZoom(ratio);
         zoomState.current.lastZoom = ratio;
         
-        // After zoom state updates, centering will be handled by flexbox + padding
-        // But we force a scroll reset to make it perfect
         requestAnimationFrame(() => {
            if (viewportRef.current) {
              viewportRef.current.scrollLeft = (viewportRef.current.scrollWidth - viewportRef.current.clientWidth) / 2;
@@ -204,6 +199,17 @@
            }
         });
       }, []);
+
+      const onAspectChange = (newAspect) => {
+        setAspect(newAspect);
+        if (imgRef.current) {
+          const { width, height } = imgRef.current;
+          const newCrop = newAspect === undefined ? 
+            { unit: '%', x: 0, y: 0, width: 100, height: 100 } : 
+            centerCrop(makeAspectCrop({ unit: '%', width: 90 }, newAspect, width, height), width, height);
+          setCrop(newCrop);
+        }
+      };
 
       useEffect(() => {
         if (editingIdx === null) return;
@@ -448,7 +454,7 @@
                 <div className="flex flex-col md:flex-row gap-5 items-center justify-between max-w-6xl mx-auto">
                   <div className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-full pb-1">
                      {[{l:'חופשי',v:undefined},{l:'1:1',v:1},{l:'16:9',v:16/9},{l:'9:16',v:9/16},{l:'4:5',v:0.8}].map(a=>(
-                       <button key={a.l} onClick={()=>setAspect(a.v)} className={`aspect-chip ${aspect===a.v?'active':''}`}>{a.l}</button>
+                       <button key={a.l} onClick={()=>onAspectChange(a.v)} className={`aspect-chip ${aspect===a.v?'active':''}`}>{a.l}</button>
                      ))}
                   </div>
 
