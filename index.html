@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.5.1</title>
+  <title>Bulk Crop Pro | v3.6.4</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,27 +19,34 @@
     
     .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; }
     
+    /* Area B - Optimized Screen Utilization and Grid Centering */
     .image-viewport { 
       flex: 1; 
-      display: flex; 
-      align-items: center; 
-      justify-content: center; 
+      display: grid;
+      place-items: center;
       overflow: auto; 
       background: #0a0a0a; 
       touch-action: pan-x pan-y;
       position: relative;
+      min-height: 0;
     }
     .image-viewport.pan-mode { cursor: grab; }
     .image-viewport.pan-mode:active { cursor: grabbing; }
     
+    /* Wrapper ensures the image expands from center during zoom */
+    .zoom-inner-wrapper {
+      display: inline-block;
+      padding: 10px;
+    }
+    
     .ReactCrop { direction: ltr !important; display: inline-block; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
     
-    /* Disable crop interaction when panning or pinching to prevent flicker */
     .disable-crop .ReactCrop__crop-selection,
     .disable-crop .ReactCrop__drag-elements,
     .disable-crop .ReactCrop__interaction-layer { pointer-events: none !important; }
 
+    /* Area C - Footer */
     .editor-footer { background: #111827; padding: 12px; border-top: 1px solid #374151; z-index: 10000; }
     @media (min-width: 768px) { .editor-footer { padding: 16px 40px; } }
     
@@ -84,6 +91,7 @@
       const [aspect, setAspect] = useState(undefined);
       const [isProcessing, setIsProcessing] = useState(false);
       const [zoom, setZoom] = useState(1);
+      const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 });
       const [isPanMode, setIsPanMode] = useState(false);
       const [isPinching, setIsPinching] = useState(false);
       
@@ -97,7 +105,7 @@
         const newImgs = Array.from(files).filter(f => f.type.startsWith('image/')).map(f => ({
           id: Math.random().toString(36).substr(2, 9),
           url: URL.createObjectURL(f),
-          name: f.name || `Pasted Image ${new Date().toLocaleTimeString()}`,
+          name: f.name || `Image_${new Date().getTime()}`,
           cropped: null,
           cropConfig: null
         }));
@@ -125,7 +133,6 @@
         if (editingIdx !== null) {
           document.body.classList.add('editor-open');
           setIsPanMode(false);
-          setZoom(1); 
           const currentImg = images[editingIdx];
           if (currentImg.cropConfig) {
             setCrop(currentImg.cropConfig.crop);
@@ -142,6 +149,7 @@
       const onImageLoad = (e) => {
         const { width, height, naturalWidth, naturalHeight } = e.currentTarget;
         imgRef.current = e.currentTarget;
+        setNaturalSize({ w: naturalWidth, h: naturalHeight });
         
         if (viewportRef.current) {
           const vw = viewportRef.current.clientWidth - 40;
@@ -160,7 +168,9 @@
           setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
           setCompletedCrop({ unit: 'px', x: 0, y: 0, width, height });
         } else {
-          setCrop(centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height), width, height));
+          const initialCrop = centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height), width, height);
+          setCrop(initialCrop);
+          setCompletedCrop(initialCrop);
         }
       };
 
@@ -191,10 +201,11 @@
         setAspect(newAspect);
         if (imgRef.current) {
           const { width, height } = imgRef.current;
-          setCrop(newAspect === undefined ? 
+          const newCrop = newAspect === undefined ? 
             { unit: '%', x: 0, y: 0, width: 100, height: 100 } : 
-            centerCrop(makeAspectCrop({ unit: '%', width: 90 }, newAspect, width, height), width, height)
-          );
+            centerCrop(makeAspectCrop({ unit: '%', width: 90 }, newAspect, width, height), width, height);
+          setCrop(newCrop);
+          setCompletedCrop(newCrop);
         }
       };
 
@@ -205,14 +216,21 @@
         const canvas = document.createElement('canvas');
         const scaleX = image.naturalWidth / image.width;
         const scaleY = image.naturalHeight / image.height;
-        canvas.width = Math.ceil(completedCrop.width * scaleX);
-        canvas.height = Math.ceil(completedCrop.height * scaleY);
+        
+        const finalW = completedCrop.unit === '%' ? (completedCrop.width * image.width / 100) : completedCrop.width;
+        const finalH = completedCrop.unit === '%' ? (completedCrop.height * image.height / 100) : completedCrop.height;
+        const finalX = completedCrop.unit === '%' ? (completedCrop.x * image.width / 100) : completedCrop.x;
+        const finalY = completedCrop.unit === '%' ? (completedCrop.y * image.height / 100) : completedCrop.y;
+
+        canvas.width = Math.ceil(finalW * scaleX);
+        canvas.height = Math.ceil(finalH * scaleY);
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(image, completedCrop.x * scaleX, completedCrop.y * scaleY, completedCrop.width * scaleX, completedCrop.height * scaleY, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, finalX * scaleX, finalY * scaleY, finalW * scaleX, finalH * scaleY, 0, 0, canvas.width, canvas.height);
+        
         const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
         setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropped: URL.createObjectURL(blob), cropConfig: { crop: { ...crop }, aspect } } : img));
         setIsProcessing(false);
@@ -296,23 +314,25 @@
 
           {editingIdx !== null && (
             <div className="editor-overlay ltr-force">
+              {/* Area A - Top bar (X on Right, Count/Tools on Left in RTL) */}
               <div className="flex items-center justify-between px-6 h-14 bg-black/40 shrink-0">
-                <div className="flex items-center gap-4">
+                <button onClick={() => setEditingIdx(null)} className="text-white/50 p-2 hover:text-white transition-colors order-first"><X size={32}/></button>
+                <div className="flex items-center gap-4 order-last">
                   <span className="text-white/60 font-black text-xs">{editingIdx + 1} / {images.length}</span>
                   <div className="flex items-center bg-white/10 p-1 rounded-xl">
                     <button onClick={() => setIsPanMode(false)} className={`p-2 rounded-lg ${!isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`} title="ערוך חיתוך"><MousePointer2 size={18}/></button>
                     <button onClick={() => setIsPanMode(true)} className={`p-2 rounded-lg ${isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`} title="הזז תמונה"><Move size={18}/></button>
                   </div>
                 </div>
-                <button onClick={() => setEditingIdx(null)} className="text-white/50 p-2 hover:text-white transition-colors"><X size={32}/></button>
               </div>
 
+              {/* Area B - Optimized Screen Utilization with Centered Zoom */}
               <div className={`image-viewport ${isPanMode ? 'pan-mode' : ''} ${isPinching || isPanMode ? 'disable-crop' : ''}`} 
                    ref={viewportRef}
                    onTouchStart={handleTouchStart} 
                    onTouchMove={handleTouchMove} 
                    onTouchEnd={handleTouchEnd}>
-                <div style={{ display: 'inline-block', padding: '100px' }}>
+                <div className="zoom-inner-wrapper">
                   <ReactCrop 
                     crop={crop} 
                     onChange={(c) => setCrop(c)} 
@@ -325,29 +345,36 @@
                       src={images[editingIdx].url} 
                       onLoad={onImageLoad} 
                       draggable={false} 
-                      className="select-none shadow-2xl"
+                      className="select-none shadow-2xl block"
                       style={{ 
-                        width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto',
-                        display: 'block'
+                        width: naturalSize.w > 0 ? `${naturalSize.w * zoom}px` : 'auto',
+                        maxWidth: 'none'
                       }}
                     />
                   </ReactCrop>
                 </div>
               </div>
 
+              {/* Area C - Footer Control Bar */}
               <div className="editor-footer" style={{ direction: 'rtl' }}>
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-between max-w-6xl mx-auto">
                   <div className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-full pb-1">
-                     {[{l:'חופשי',v:undefined},{l:'1:1',v:1},{l:'16:9',v:16/9},{l:'9:16',v:9/16},{l:'4:5',v:0.8}].map(a=>(
+                     {[
+                        {l:'חופשי',v:undefined},
+                        {l:'1:1',v:1},
+                        {l:'16:9',v:16/9},
+                        {l:'9:16',v:9/16},
+                        {l:'4:5',v:0.8}
+                      ].map(a=>(
                        <button key={a.l} onClick={()=>handleAspectChange(a.v)} className={`aspect-chip ${aspect===a.v?'active':''}`}>{a.l}</button>
                      ))}
                   </div>
 
                   <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
                     <div className="flex items-center gap-1 bg-white/10 p-1 rounded-xl">
-                      <button onClick={()=>setZoom(z=>Math.max(0.01,z-0.05))} className="p-2 text-white/50 hover:text-white"><ZoomOut size={18}/></button>
+                      <button onClick={()=>setZoom(z=>Math.max(0.01,z-0.05))} className="p-2 text-white/50 hover:text-white transition-colors"><ZoomOut size={18}/></button>
                       <span className="text-white/40 text-[10px] font-bold min-w-[45px] text-center">{Math.round(zoom * 100)}%</span>
-                      <button onClick={()=>setZoom(z=>Math.min(5,z+0.05))} className="p-2 text-white/50 hover:text-white"><ZoomIn size={18}/></button>
+                      <button onClick={()=>setZoom(z=>Math.min(5,z+0.05))} className="p-2 text-white/50 hover:text-white transition-colors"><ZoomIn size={18}/></button>
                     </div>
                     
                     <div className="flex items-center gap-2">
