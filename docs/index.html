@@ -18,7 +18,7 @@
     .ltr-force { direction: ltr !important; }
     .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; }
     .image-viewport { flex: 1; overflow: auto; background: #0a0a0a; touch-action: none; position: relative; overscroll-behavior: contain; display: flex; align-items: center; justify-content: center; }
-    .image-container { padding: 100px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transform-origin: center center; }
+    .image-container { padding: 150px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transform-origin: center center; }
     .crop-target-img { display: block; user-select: none; transition: none !important; will-change: width, height; max-width: none !important; }
     .ReactCrop { direction: ltr !important; display: inline-block; transition: none !important; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
@@ -74,18 +74,18 @@
         viewportRef.current.scrollTop = (anchorY * currentZoom) - viewY;
       }, []);
 
-      const updateZoomAnchor = useCallback((forceViewportCenter = false) => {
+      const updateZoomAnchor = useCallback((targetCenter = false) => {
         if (!viewportRef.current || !imgRef.current) return;
         const viewport = viewportRef.current;
         let targetX, targetY;
         const viewPosX = viewport.clientWidth / 2;
         const viewPosY = viewport.clientHeight / 2;
-        if (!forceViewportCenter && completedCrop && completedCrop.width > 10 && completedCrop.height > 10) {
-          targetX = (completedCrop.x + completedCrop.width / 2) * zoom + 100;
-          targetY = (completedCrop.y + completedCrop.height / 2) * zoom + 100;
+        if (!targetCenter && completedCrop && completedCrop.width > 5 && completedCrop.height > 5) {
+          targetX = (completedCrop.x + completedCrop.width / 2) * zoom + 150;
+          targetY = (completedCrop.y + completedCrop.height / 2) * zoom + 150;
         } else {
-          targetX = (imgRef.current.width / 2) + 100;
-          targetY = (imgRef.current.height / 2) + 100;
+          targetX = (imgRef.current.width / 2) + 150;
+          targetY = (imgRef.current.height / 2) + 150;
         }
         zoomState.current.viewX = viewPosX; zoomState.current.viewY = viewPosY;
         zoomState.current.anchorX = targetX / zoom; zoomState.current.anchorY = targetY / zoom;
@@ -129,6 +129,7 @@
             { unit: '%', x: 0, y: 0, width: 100, height: 100 } : 
             centerCrop(makeAspectCrop({ unit: '%', width: 90 }, newAspect, width, height), width, height);
           setCrop(newCrop);
+          setTimeout(() => updateZoomAnchor(false), 50);
         }
       };
 
@@ -143,15 +144,15 @@
       useEffect(() => {
         if (editingIdx !== null) { document.body.classList.add('editor-open'); setIsPanMode(false); const currentImg = images[editingIdx]; if (currentImg.cropConfig) { setCrop(currentImg.cropConfig.crop); setAspect(currentImg.cropConfig.aspect); } else { setAspect(undefined); setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 }); } }
         else document.body.classList.remove('editor-open');
-      }, [editingIdx]);
+      }, [editingIdx, images]);
 
       const onImageLoad = (e) => { imgRef.current = e.currentTarget; fitToViewport(); if (aspect === undefined) setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 }); else setCrop(centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, e.currentTarget.width, e.currentTarget.height), e.currentTarget.width, e.currentTarget.height)); };
 
       const handleTouchStart = (e) => {
         if (e.touches.length === 2) {
           setIsPinching(true); zoomState.current.isPinching = true;
-          const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
           const rect = viewportRef.current.getBoundingClientRect();
+          const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
           const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
           const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
           zoomState.current.touchStartDist = dist; zoomState.current.touchStartZoom = zoom;
@@ -171,6 +172,7 @@
           const newZoom = Math.min(20, Math.max(0.001, zoomState.current.touchStartZoom * (dist / zoomState.current.touchStartDist)));
           setZoom(newZoom);
           applyZoomScroll(newZoom, zoomState.current.anchorX, zoomState.current.anchorY, midX, midY);
+          zoomState.current.viewX = midX; zoomState.current.viewY = midY;
         }
       };
 
@@ -197,7 +199,7 @@
                 <div className="flex items-center gap-4"><span className="text-white/80 font-black text-sm">{editingIdx + 1} / {images.length}</span><div className="flex items-center bg-white/10 p-1 rounded-2xl"><button onClick={() => setIsPanMode(false)} className={`p-2 rounded-xl ${!isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><MousePointer2 size={18}/></button><button onClick={() => setIsPanMode(true)} className={`p-2 rounded-xl ${isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><Move size={18}/></button></div></div>
                 <button onClick={() => setEditingIdx(null)} className="text-white/50 p-2"><X size={32}/></button>
               </div>
-              <div className="image-viewport" ref={viewportRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={() => { zoomState.current.isPinching = false; setIsPinching(false); }} onWheel={(e) => { e.preventDefault(); updateZoomAnchor(); setZoom(z => Math.min(20, Math.max(0.001, z * (e.deltaY > 0 ? 0.9 : 1.1)))); }}>
+              <div className="image-viewport" ref={viewportRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={() => { zoomState.current.isPinching = false; setIsPinching(false); }} onWheel={(e) => { e.preventDefault(); updateZoomAnchor(false); setZoom(z => Math.min(20, Math.max(0.001, z * (e.deltaY > 0 ? 0.9 : 1.1)))); }}>
                 <div className="image-container"><ReactCrop crop={crop} onChange={(c) => setCrop(c)} onComplete={(c) => setCompletedCrop(c)} aspect={aspect} disabled={isPanMode || isPinching}><img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false} className="crop-target-img shadow-2xl" style={{ width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto', height: imgRef.current ? `${imgRef.current.naturalHeight * zoom}px` : 'auto' }} /></ReactCrop></div>
               </div>
               <div className="editor-footer" style={{ direction: 'rtl' }}>
@@ -213,7 +215,7 @@
                      ].map((a, i)=>(<button key={i} onClick={()=>onAspectChange(a.v)} className={`aspect-chip ${aspect===a.v?'active':''}`}>{a.l}</button>))}
                   </div>
                   <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                    <div className="flex items-center gap-1 bg-white/10 p-1 rounded-2xl"><button onClick={()=>{updateZoomAnchor(); setZoom(z=>Math.max(0.001,z*0.8))}} className="p-2 text-white/50"><ZoomOut size={18}/></button><button onClick={fitToViewport} className="p-2 text-white/50"><Maximize size={18}/></button><button onClick={()=>{updateZoomAnchor(); setZoom(z=>Math.min(20,z*1.2))}} className="p-2 text-white/50"><ZoomIn size={18}/></button></div>
+                    <div className="flex items-center gap-1 bg-white/10 p-1 rounded-2xl"><button onClick={()=>{updateZoomAnchor(false); setZoom(z=>Math.max(0.001,z*0.8))}} className="p-2 text-white/50"><ZoomOut size={18}/></button><button onClick={fitToViewport} className="p-2 text-white/50"><Maximize size={18}/></button><button onClick={()=>{updateZoomAnchor(false); setZoom(z=>Math.min(20,z*1.2))}} className="p-2 text-white/50"><ZoomIn size={18}/></button></div>
                     <div className="flex items-center gap-2">
                       <button onClick={()=>setEditingIdx(i=>Math.max(0,i-1))} disabled={editingIdx===0} className="p-2 text-white/20"><ChevronRight size={36}/></button>
                       <button onClick={handleSave} disabled={isProcessing} className="bg-indigo-600 text-white px-8 h-12 rounded-2xl font-black min-w-[120px] text-sm">שמור חיתוך</button>
