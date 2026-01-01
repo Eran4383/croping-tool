@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.5.0</title>
+  <title>Bulk Crop Pro | v3.5.1</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28,7 +28,6 @@
       background: #0a0a0a; 
       touch-action: pan-x pan-y;
       position: relative;
-      cursor: default;
     }
     .image-viewport.pan-mode { cursor: grab; }
     .image-viewport.pan-mode:active { cursor: grabbing; }
@@ -36,10 +35,10 @@
     .ReactCrop { direction: ltr !important; display: inline-block; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
     
-    /* Disable crop interaction when panning or pinching */
+    /* Disable crop interaction when panning or pinching to prevent flicker */
     .disable-crop .ReactCrop__crop-selection,
-    .disable-crop .ReactCrop__drag-elements { pointer-events: none !important; }
-    .disable-crop .ReactCrop { pointer-events: none !important; }
+    .disable-crop .ReactCrop__drag-elements,
+    .disable-crop .ReactCrop__interaction-layer { pointer-events: none !important; }
 
     .editor-footer { background: #111827; padding: 12px; border-top: 1px solid #374151; z-index: 10000; }
     @media (min-width: 768px) { .editor-footer { padding: 16px 40px; } }
@@ -47,9 +46,6 @@
     .aspect-chip { padding: 8px 16px; background: #1f2937; color: #9ca3af; border-radius: 10px; font-size: 13px; font-weight: 700; border: 1px solid #374151; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
     .aspect-chip.active { background: var(--primary); color: white; border-color: var(--primary); }
     
-    .mode-btn { p: 8px; border-radius: 12px; transition: all 0.2s; display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 12px; color: #9ca3af; border: 1px solid #374151; }
-    .mode-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-
     .img-grid-item { position: relative; aspect-ratio: 1/1; border-radius: 20px; overflow: hidden; background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); cursor: pointer; border: 2px solid transparent; transition: transform 0.2s; }
     .img-grid-item:hover { transform: translateY(-2px); }
     .img-grid-item.done { border-color: var(--accent); }
@@ -130,16 +126,23 @@
           document.body.classList.add('editor-open');
           setIsPanMode(false);
           setZoom(1); 
+          const currentImg = images[editingIdx];
+          if (currentImg.cropConfig) {
+            setCrop(currentImg.cropConfig.crop);
+            setAspect(currentImg.cropConfig.aspect);
+          } else {
+            setAspect(undefined);
+            setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+          }
         } else {
           document.body.classList.remove('editor-open');
         }
-      }, [editingIdx]);
+      }, [editingIdx, images]);
 
       const onImageLoad = (e) => {
         const { width, height, naturalWidth, naturalHeight } = e.currentTarget;
         imgRef.current = e.currentTarget;
         
-        // Initial Fit
         if (viewportRef.current) {
           const vw = viewportRef.current.clientWidth - 40;
           const vh = viewportRef.current.clientHeight - 40;
@@ -150,12 +153,12 @@
         const currentImg = images[editingIdx];
         if (currentImg && currentImg.cropConfig) {
           setCrop(currentImg.cropConfig.crop);
-          setAspect(currentImg.cropConfig.aspect);
           return;
         }
 
         if (aspect === undefined) {
           setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+          setCompletedCrop({ unit: 'px', x: 0, y: 0, width, height });
         } else {
           setCrop(centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height), width, height));
         }
@@ -175,7 +178,7 @@
           e.preventDefault();
           const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
           const ratio = dist / touchStartDist.current;
-          setZoom(Math.min(5, Math.max(0.05, touchStartZoom.current * ratio)));
+          setZoom(Math.min(5, Math.max(0.01, touchStartZoom.current * ratio)));
         }
       };
 
@@ -198,7 +201,6 @@
       const handleSave = async () => {
         if (!completedCrop || !imgRef.current || editingIdx === null) return;
         setIsProcessing(true);
-        
         const image = imgRef.current;
         const canvas = document.createElement('canvas');
         const scaleX = image.naturalWidth / image.width;
@@ -206,17 +208,13 @@
         canvas.width = Math.ceil(completedCrop.width * scaleX);
         canvas.height = Math.ceil(completedCrop.height * scaleY);
         const ctx = canvas.getContext('2d');
-        
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(image, completedCrop.x * scaleX, completedCrop.y * scaleY, completedCrop.width * scaleX, completedCrop.height * scaleY, 0, 0, canvas.width, canvas.height);
-        
         const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
-        const url = URL.createObjectURL(blob);
-        
-        setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropped: url, cropConfig: { crop: { ...crop }, aspect } } : img));
+        setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropped: URL.createObjectURL(blob), cropConfig: { crop: { ...crop }, aspect } } : img));
         setIsProcessing(false);
         setEditingIdx(null);
       };
@@ -248,6 +246,17 @@
         alert('החיתוך הוחל על כל הגלריה!');
       };
 
+      const downloadAll = async () => {
+        for (const img of images) {
+          if (!img.cropped) continue;
+          const link = document.createElement('a');
+          link.href = img.cropped;
+          link.download = `CROP_${img.name.split('.')[0]}.jpg`;
+          link.click();
+          await new Promise(r => setTimeout(r, 400));
+        }
+      };
+
       return (
         <div className="min-h-screen flex flex-col ltr-force">
           <header className="h-16 bg-white border-b px-6 flex items-center justify-between sticky top-0 z-40" style={{ direction: 'rtl' }}>
@@ -255,13 +264,7 @@
             {images.length > 0 && (
               <div className="flex items-center gap-2">
                 <button onClick={() => setImages([])} className="text-slate-400 hover:text-red-500 p-2"><Trash2 size={20}/></button>
-                <button onClick={() => {
-                  images.forEach(img => {
-                    if (img.cropped) {
-                      const l = document.createElement('a'); l.href = img.cropped; l.download = `CROP_${img.name.split('.')[0]}.jpg`; l.click();
-                    }
-                  });
-                }} className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg"><Download size={16}/> הורד הכל</button>
+                <button onClick={downloadAll} className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg active:scale-95 transition-all"><Download size={16}/> הורד הכל</button>
               </div>
             )}
           </header>
@@ -342,7 +345,7 @@
 
                   <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
                     <div className="flex items-center gap-1 bg-white/10 p-1 rounded-xl">
-                      <button onClick={()=>setZoom(z=>Math.max(0.02,z-0.05))} className="p-2 text-white/50 hover:text-white"><ZoomOut size={18}/></button>
+                      <button onClick={()=>setZoom(z=>Math.max(0.01,z-0.05))} className="p-2 text-white/50 hover:text-white"><ZoomOut size={18}/></button>
                       <span className="text-white/40 text-[10px] font-bold min-w-[45px] text-center">{Math.round(zoom * 100)}%</span>
                       <button onClick={()=>setZoom(z=>Math.min(5,z+0.05))} className="p-2 text-white/50 hover:text-white"><ZoomIn size={18}/></button>
                     </div>
