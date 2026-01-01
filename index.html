@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.6.4</title>
+  <title>Bulk Crop Pro | v3.6.5</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,15 +26,20 @@
       touch-action: none; 
       position: relative;
       overscroll-behavior: contain;
-      display: block; /* Using block for absolute scroll control */
+      display: flex; /* Flex for natural centering */
+      align-items: center;
+      justify-content: center;
     }
     .image-viewport.pan-mode { cursor: grab; }
     .image-viewport.pan-mode:active { cursor: grabbing; }
     
     .image-container {
-      padding: 100vh 100vw; /* Massive padding to allow infinite-feeling pan in all directions */
-      display: inline-block;
-      transform-origin: 0 0;
+      padding: 100px; /* Safe area around image */
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-origin: center center;
     }
 
     .crop-target-img {
@@ -103,6 +108,7 @@
       const imgRef = useRef(null);
       const fileInputRef = useRef(null);
       const viewportRef = useRef(null);
+      const containerRef = useRef(null);
       
       const zoomState = useRef({
         lastZoom: 1,
@@ -115,34 +121,31 @@
         isPinching: false
       });
 
-      // Unified method to set scroll based on an anchor
       const applyZoomScroll = useCallback((currentZoom, anchorX, anchorY, viewX, viewY) => {
         if (!viewportRef.current) return;
         const viewport = viewportRef.current;
+        // Scroll adjustment considering flex centering
         viewport.scrollLeft = (anchorX * currentZoom) - viewX;
         viewport.scrollTop = (anchorY * currentZoom) - viewY;
       }, []);
 
       const updateZoomAnchor = useCallback((forceViewportCenter = false) => {
-        if (!viewportRef.current || !imgRef.current) return;
+        if (!viewportRef.current || !imgRef.current || !containerRef.current) return;
         const viewport = viewportRef.current;
+        const container = containerRef.current;
         
-        // Content scale coordinates
-        let targetX, targetY;
         const viewPosX = viewport.clientWidth / 2;
         const viewPosY = viewport.clientHeight / 2;
 
-        const containerPaddingX = window.innerWidth; // 100vw
-        const containerPaddingY = window.innerHeight; // 100vh
+        let targetX, targetY;
 
+        // Coordinates are relative to containerRef (which starts at image origin + padding)
         if (!forceViewportCenter && completedCrop && completedCrop.width > 10 && completedCrop.height > 10) {
-          // Centering on the crop box
-          targetX = (completedCrop.x + completedCrop.width / 2) * zoom + containerPaddingX;
-          targetY = (completedCrop.y + completedCrop.height / 2) * zoom + containerPaddingY;
+          targetX = (completedCrop.x + completedCrop.width / 2) * zoom + 100; // 100 is padding
+          targetY = (completedCrop.y + completedCrop.height / 2) * zoom + 100;
         } else {
-          // Centering on the image center
-          targetX = (imgRef.current.width / 2) + containerPaddingX;
-          targetY = (imgRef.current.height / 2) + containerPaddingY;
+          targetX = (imgRef.current.width / 2) + 100;
+          targetY = (imgRef.current.height / 2) + 100;
         }
 
         zoomState.current.viewX = viewPosX;
@@ -152,6 +155,7 @@
       }, [zoom, completedCrop]);
 
       const handleAddImages = useCallback((files) => {
+        if (!files || files.length === 0) return;
         const newImgs = Array.from(files).filter(f => f.type.startsWith('image/')).map(f => ({
           id: Math.random().toString(36).substr(2, 9),
           url: URL.createObjectURL(f),
@@ -160,6 +164,7 @@
           cropConfig: null
         }));
         setImages(prev => [...prev, ...newImgs]);
+        if (fileInputRef.current) fileInputRef.current.value = ''; // Reset for re-selection
       }, []);
 
       useEffect(() => {
@@ -187,29 +192,22 @@
         const vh = viewport.clientHeight - 40;
         const ratio = Math.min(vw / img.naturalWidth, vh / img.naturalHeight);
         
-        // Calculate where the center of the image will be at the new zoom
-        const containerPaddingX = window.innerWidth;
-        const containerPaddingY = window.innerHeight;
-        
-        const targetX = (img.naturalWidth * ratio / 2) + containerPaddingX;
-        const targetY = (img.naturalHeight * ratio / 2) + containerPaddingY;
-        
-        zoomState.current.anchorX = targetX / ratio;
-        zoomState.current.anchorY = targetY / ratio;
-        zoomState.current.viewX = viewport.clientWidth / 2;
-        zoomState.current.viewY = viewport.clientHeight / 2;
-        
         setZoom(ratio);
         zoomState.current.lastZoom = ratio;
         
-        // Immediate scroll application for the fit
-        setTimeout(() => applyZoomScroll(ratio, zoomState.current.anchorX, zoomState.current.anchorY, zoomState.current.viewX, zoomState.current.viewY), 0);
-      }, [applyZoomScroll]);
+        // After zoom state updates, centering will be handled by flexbox + padding
+        // But we force a scroll reset to make it perfect
+        requestAnimationFrame(() => {
+           if (viewportRef.current) {
+             viewportRef.current.scrollLeft = (viewportRef.current.scrollWidth - viewportRef.current.clientWidth) / 2;
+             viewportRef.current.scrollTop = (viewportRef.current.scrollHeight - viewportRef.current.clientHeight) / 2;
+           }
+        });
+      }, []);
 
       useEffect(() => {
         if (editingIdx === null) return;
         const observer = new ResizeObserver(() => {
-          // Only refit if we're not manually zooming
           if (!zoomState.current.isPinching) fitToViewport();
         });
         if (viewportRef.current) observer.observe(viewportRef.current);
@@ -423,7 +421,7 @@
                      const delta = e.deltaY > 0 ? 0.9 : 1.1;
                      setZoom(z => Math.min(20, Math.max(0.001, z * delta)));
                    }}>
-                <div className="image-container">
+                <div className="image-container" ref={containerRef}>
                   <ReactCrop 
                     crop={crop} 
                     onChange={(c) => setCrop(c)} 
