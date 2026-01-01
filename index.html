@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.6.2</title>
+  <title>Bulk Crop Pro | v3.6.3</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,7 +25,7 @@
       place-items: center;
       overflow: auto; 
       background: #0a0a0a; 
-      touch-action: none; /* We handle all gestures manually for max performance */
+      touch-action: none; 
       position: relative;
       overscroll-behavior: contain;
     }
@@ -33,7 +33,7 @@
     .image-viewport.pan-mode:active { cursor: grabbing; }
     
     .image-container {
-      padding: 100px; /* Large padding to allow cropping near edges at high zoom */
+      padding: 150px; /* Even larger padding for freedom of movement */
       display: inline-block;
       margin: auto;
       transform-origin: 0 0;
@@ -43,7 +43,7 @@
       display: block;
       user-select: none;
       -webkit-user-drag: none;
-      transition: none !important; /* Zero lag transition */
+      transition: none !important;
       will-change: width, height;
       max-width: none !important;
     }
@@ -51,7 +51,6 @@
     .ReactCrop { direction: ltr !important; display: inline-block; transition: none !important; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
     
-    /* Disable interactions during pinch to boost FPS */
     .is-pinching .ReactCrop__crop-selection,
     .is-pinching .ReactCrop__drag-elements,
     .is-pinching .ReactCrop__interaction-layer { pointer-events: none !important; }
@@ -109,14 +108,43 @@
       
       const zoomState = useRef({
         lastZoom: 1,
-        anchorX: 0, // content coordinates
+        anchorX: 0, 
         anchorY: 0,
-        viewX: 0,   // viewport coordinates
+        viewX: 0,   
         viewY: 0,
         touchStartDist: 0,
         touchStartZoom: 1,
         isPinching: false
       });
+
+      // Helper to determine where to anchor the zoom
+      const updateZoomAnchor = useCallback((forceViewportCenter = false) => {
+        if (!viewportRef.current || !imgRef.current) return;
+        const viewport = viewportRef.current;
+        const rect = viewport.getBoundingClientRect();
+        
+        // Default: Viewport Center
+        let targetX = viewport.scrollLeft + viewport.clientWidth / 2;
+        let targetY = viewport.scrollTop + viewport.clientHeight / 2;
+        let viewPosX = viewport.clientWidth / 2;
+        let viewPosY = viewport.clientHeight / 2;
+
+        // Smart Focus: If crop is valid and not "too small"
+        if (!forceViewportCenter && completedCrop && completedCrop.width > 10 && completedCrop.height > 10) {
+          // completedCrop coordinates are relative to the image element
+          // We need to add the offset of the image inside the container (padding)
+          const imgRect = imgRef.current.getBoundingClientRect();
+          const containerPadding = 150; // matches css
+          
+          targetX = (completedCrop.x + completedCrop.width / 2) * zoom + containerPadding;
+          targetY = (completedCrop.y + completedCrop.height / 2) * zoom + containerPadding;
+        }
+
+        zoomState.current.viewX = viewPosX;
+        zoomState.current.viewY = viewPosY;
+        zoomState.current.anchorX = targetX / zoom;
+        zoomState.current.anchorY = targetY / zoom;
+      }, [zoom, completedCrop]);
 
       const handleAddImages = useCallback((files) => {
         const newImgs = Array.from(files).filter(f => f.type.startsWith('image/')).map(f => ({
@@ -154,15 +182,10 @@
         const vh = viewport.clientHeight - 80;
         const ratio = Math.min(vw / img.naturalWidth, vh / img.naturalHeight);
         
-        // Reset anchor to center for fit action
-        zoomState.current.viewX = viewport.clientWidth / 2;
-        zoomState.current.viewY = viewport.clientHeight / 2;
-        zoomState.current.anchorX = (viewport.scrollLeft + zoomState.current.viewX) / zoom;
-        zoomState.current.anchorY = (viewport.scrollTop + zoomState.current.viewY) / zoom;
-        
+        updateZoomAnchor(true); // Force center for fit
         setZoom(ratio);
         zoomState.current.lastZoom = ratio;
-      }, [zoom]);
+      }, [updateZoomAnchor]);
 
       useEffect(() => {
         if (editingIdx === null) return;
@@ -171,7 +194,6 @@
         return () => observer.disconnect();
       }, [editingIdx, fitToViewport]);
 
-      // Ultra-smooth scroll sync
       useLayoutEffect(() => {
         if (!viewportRef.current || !imgRef.current) return;
         const viewport = viewportRef.current;
@@ -179,7 +201,6 @@
         
         const delta = zoom / lastZoom;
         if (delta !== 1) {
-          // If anchored to fingers/center, maintain that point under the view position
           viewport.scrollLeft = (anchorX * zoom) - viewX;
           viewport.scrollTop = (anchorY * zoom) - viewY;
         }
@@ -251,19 +272,17 @@
           const midX = (t1.clientX + t2.clientX) / 2 - rect.left;
           const midY = (t1.clientY + t2.clientY) / 2 - rect.top;
           
-          // Update anchor viewport position as fingers move
           zoomState.current.viewX = midX;
           zoomState.current.viewY = midY;
           
           const ratio = dist / zoomState.current.touchStartDist;
-          const newZoom = Math.min(15, Math.max(0.001, zoomState.current.touchStartZoom * ratio));
-          setZoom(newZoom);
+          setZoom(Math.min(15, Math.max(0.001, zoomState.current.touchStartZoom * ratio)));
         }
       };
 
-      const handleTouchEnd = () => { 
-        zoomState.current.isPinching = false;
-        setIsPinching(false);
+      const handleZoomAction = (factor) => {
+        updateZoomAnchor();
+        setZoom(z => Math.min(15, Math.max(0.001, z * factor)));
       };
 
       const handleSave = async () => {
@@ -378,14 +397,10 @@
                    ref={viewportRef}
                    onTouchStart={handleTouchStart} 
                    onTouchMove={handleTouchMove} 
-                   onTouchEnd={handleTouchEnd}
+                   onTouchEnd={() => { zoomState.current.isPinching = false; setIsPinching(false); }}
                    onWheel={(e) => {
                      e.preventDefault();
-                     const rect = viewportRef.current.getBoundingClientRect();
-                     zoomState.current.viewX = e.clientX - rect.left;
-                     zoomState.current.viewY = e.clientY - rect.top;
-                     zoomState.current.anchorX = (viewportRef.current.scrollLeft + zoomState.current.viewX) / zoom;
-                     zoomState.current.anchorY = (viewportRef.current.scrollTop + zoomState.current.viewY) / zoom;
+                     updateZoomAnchor();
                      const delta = e.deltaY > 0 ? 0.9 : 1.1;
                      setZoom(z => Math.min(15, Math.max(0.001, z * delta)));
                    }}>
@@ -422,9 +437,9 @@
 
                   <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
                     <div className="flex items-center gap-1 bg-white/10 p-1.5 rounded-2xl border border-white/5">
-                      <button onClick={()=>setZoom(z=>Math.max(0.001,z*0.8))} className="p-2 text-white/50 hover:text-white transition-colors"><ZoomOut size={20}/></button>
+                      <button onClick={()=>handleZoomAction(0.8)} className="p-2 text-white/50 hover:text-white transition-colors"><ZoomOut size={20}/></button>
                       <button onClick={fitToViewport} className="p-2 text-white/50 hover:text-white transition-colors" title="התאם למסך"><Maximize size={20}/></button>
-                      <button onClick={()=>setZoom(z=>Math.min(15,z*1.2))} className="p-2 text-white/50 hover:text-white transition-colors"><ZoomIn size={20}/></button>
+                      <button onClick={()=>handleZoomAction(1.2)} className="p-2 text-white/50 hover:text-white transition-colors"><ZoomIn size={20}/></button>
                     </div>
                     
                     <div className="flex items-center gap-3">
