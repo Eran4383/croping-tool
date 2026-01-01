@@ -17,14 +17,12 @@
     body.editor-open { overflow: hidden; height: 100vh; position: fixed; width: 100%; }
     .ltr-force { direction: ltr !important; }
     .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; }
-    .image-viewport { flex: 1; display: grid; place-items: center; overflow: auto; background: #0a0a0a; touch-action: pan-x pan-y; position: relative; }
-    .image-viewport.pan-mode { cursor: grab; }
-    .image-viewport.pan-mode:active { cursor: grabbing; }
-    .image-container { padding: 40px; display: inline-block; margin: auto; }
-    .crop-target-img { transition: width 0.15s ease-out; display: block; user-select: none; }
-    .ReactCrop { direction: ltr !important; display: inline-block; }
+    .image-viewport { flex: 1; display: grid; place-items: center; overflow: auto; background: #0a0a0a; touch-action: none; position: relative; overscroll-behavior: contain; }
+    .image-container { padding: 100px; display: inline-block; margin: auto; transform-origin: 0 0; }
+    .crop-target-img { display: block; user-select: none; transition: none !important; will-change: width, height; max-width: none !important; }
+    .ReactCrop { direction: ltr !important; display: inline-block; transition: none !important; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
-    .disable-crop .ReactCrop__crop-selection, .disable-crop .ReactCrop__drag-elements, .disable-crop .ReactCrop__interaction-layer { pointer-events: none !important; }
+    .is-pinching .ReactCrop__crop-selection, .is-pinching .ReactCrop__drag-elements, .is-pinching .ReactCrop__interaction-layer { pointer-events: none !important; }
     .editor-footer { background: #111827; padding: 12px; border-top: 1px solid #374151; z-index: 10000; }
     @media (min-width: 768px) { .editor-footer { padding: 16px 40px; } }
     .aspect-chip { padding: 8px 16px; background: #1f2937; color: #9ca3af; border-radius: 10px; font-size: 13px; font-weight: 700; border: 1px solid #374151; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
@@ -34,8 +32,6 @@
     .img-grid-item.done { border-color: var(--accent); }
     .loading-spinner { animation: spin 1s linear infinite; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
   <script type="importmap">
 {
@@ -52,7 +48,7 @@
 <body>
   <div id="root"></div>
   <script type="text/babel" data-type="module" data-presets="react,typescript">
-    import React, { useState, useEffect, useRef, useCallback } from 'react';
+    import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
     import { createRoot } from 'react-dom/client';
     import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2, Maximize } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
@@ -67,39 +63,25 @@
       const [zoom, setZoom] = useState(1);
       const [isPanMode, setIsPanMode] = useState(false);
       const [isPinching, setIsPinching] = useState(false);
-      
       const imgRef = useRef(null);
       const fileInputRef = useRef(null);
       const viewportRef = useRef(null);
-      const lastZoomRef = useRef(zoom);
-      const touchStartDist = useRef(0);
-      const touchStartZoom = useRef(1);
+      const zoomState = useRef({ lastZoom: 1, anchorX: 0, anchorY: 0, viewX: 0, viewY: 0, touchStartDist: 0, touchStartZoom: 1, isPinching: false });
 
       const handleAddImages = useCallback((files) => {
         const newImgs = Array.from(files).filter(f => f.type.startsWith('image/')).map(f => ({
-          id: Math.random().toString(36).substr(2, 9),
-          url: URL.createObjectURL(f),
-          name: f.name || `Pasted Image ${new Date().toLocaleTimeString()}`,
-          cropped: null,
-          cropConfig: null
+          id: Math.random().toString(36).substr(2, 9), url: URL.createObjectURL(f), name: f.name || `Image`, cropped: null, cropConfig: null
         }));
         setImages(prev => [...prev, ...newImgs]);
       }, []);
 
       useEffect(() => {
         const handlePaste = (e) => {
-          const items = e.clipboardData?.items;
-          if (!items) return;
-          const files = [];
-          for (const item of items) {
-            if (item.type.indexOf('image') !== -1) {
-              const file = item.getAsFile(); if (file) files.push(file);
-            }
-          }
+          const items = e.clipboardData?.items; if (!items) return;
+          const files = []; for (const item of items) { if (item.type.indexOf('image') !== -1) { const file = item.getAsFile(); if (file) files.push(file); } }
           if (files.length > 0) handleAddImages(files);
         };
-        window.addEventListener('paste', handlePaste);
-        return () => window.removeEventListener('paste', handlePaste);
+        window.addEventListener('paste', handlePaste); return () => window.removeEventListener('paste', handlePaste);
       }, [handleAddImages]);
 
       const fitToViewport = useCallback(() => {
@@ -107,77 +89,62 @@
         const vw = viewportRef.current.clientWidth - 80;
         const vh = viewportRef.current.clientHeight - 80;
         const ratio = Math.min(vw / imgRef.current.naturalWidth, vh / imgRef.current.naturalHeight);
-        setZoom(ratio); lastZoomRef.current = ratio;
-      }, []);
+        zoomState.current.viewX = viewportRef.current.clientWidth / 2;
+        zoomState.current.viewY = viewportRef.current.clientHeight / 2;
+        zoomState.current.anchorX = (viewportRef.current.scrollLeft + zoomState.current.viewX) / zoom;
+        zoomState.current.anchorY = (viewportRef.current.scrollTop + zoomState.current.viewY) / zoom;
+        setZoom(ratio); zoomState.current.lastZoom = ratio;
+      }, [zoom]);
 
-      useEffect(() => {
-        if (editingIdx === null) return;
-        const observer = new ResizeObserver(() => fitToViewport());
-        if (viewportRef.current) observer.observe(viewportRef.current);
-        return () => observer.disconnect();
-      }, [editingIdx, fitToViewport]);
-
-      useEffect(() => {
+      useLayoutEffect(() => {
         if (!viewportRef.current || !imgRef.current) return;
-        const viewport = viewportRef.current;
-        const delta = zoom / lastZoomRef.current;
+        const delta = zoom / zoomState.current.lastZoom;
         if (delta !== 1) {
-          const scrollX = viewport.scrollLeft; const scrollY = viewport.scrollTop;
-          const vw = viewport.clientWidth; const vh = viewport.clientHeight;
-          const centerX = scrollX + vw / 2; const centerY = scrollY + vh / 2;
-          viewport.scrollLeft = (centerX * delta) - (vw / 2);
-          viewport.scrollTop = (centerY * delta) - (vh / 2);
+          viewportRef.current.scrollLeft = (zoomState.current.anchorX * zoom) - zoomState.current.viewX;
+          viewportRef.current.scrollTop = (zoomState.current.anchorY * zoom) - zoomState.current.viewY;
         }
-        lastZoomRef.current = zoom;
+        zoomState.current.lastZoom = zoom;
       }, [zoom]);
 
       useEffect(() => {
         if (editingIdx !== null) {
-          document.body.classList.add('editor-open');
-          setIsPanMode(false);
+          document.body.classList.add('editor-open'); setIsPanMode(false);
           const currentImg = images[editingIdx];
-          if (currentImg.cropConfig) {
-            setCrop(currentImg.cropConfig.crop); setAspect(currentImg.cropConfig.aspect);
-          } else {
-            setAspect(undefined); setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
-          }
-        } else {
-          document.body.classList.remove('editor-open');
-        }
+          if (currentImg.cropConfig) { setCrop(currentImg.cropConfig.crop); setAspect(currentImg.cropConfig.aspect); }
+          else { setAspect(undefined); setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 }); }
+        } else { document.body.classList.remove('editor-open'); }
       }, [editingIdx]);
 
       const onImageLoad = (e) => {
-        imgRef.current = e.currentTarget;
-        fitToViewport();
-        const currentImg = images[editingIdx];
-        if (currentImg && currentImg.cropConfig) {
-          setCrop(currentImg.cropConfig.crop); return;
-        }
-        if (aspect === undefined) {
-          setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
-        } else {
-          setCrop(centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, e.currentTarget.width, e.currentTarget.height), e.currentTarget.width, e.currentTarget.height));
-        }
+        imgRef.current = e.currentTarget; fitToViewport();
+        if (aspect === undefined) setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+        else setCrop(centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, e.currentTarget.width, e.currentTarget.height), e.currentTarget.width, e.currentTarget.height));
       };
 
       const handleTouchStart = (e) => {
         if (e.touches.length === 2) {
-          setIsPinching(true);
+          setIsPinching(true); zoomState.current.isPinching = true;
           const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-          touchStartDist.current = dist; touchStartZoom.current = zoom;
+          const rect = viewportRef.current.getBoundingClientRect();
+          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+          const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+          zoomState.current.touchStartDist = dist; zoomState.current.touchStartZoom = zoom;
+          zoomState.current.viewX = midX; zoomState.current.viewY = midY;
+          zoomState.current.anchorX = (viewportRef.current.scrollLeft + midX) / zoom;
+          zoomState.current.anchorY = (viewportRef.current.scrollTop + midY) / zoom;
         }
       };
 
       const handleTouchMove = (e) => {
-        if (e.touches.length === 2 && touchStartDist.current > 0) {
+        if (e.touches.length === 2 && zoomState.current.isPinching) {
           e.preventDefault();
           const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-          const ratio = dist / touchStartDist.current;
-          setZoom(Math.min(5, Math.max(0.01, touchStartZoom.current * ratio)));
+          const rect = viewportRef.current.getBoundingClientRect();
+          zoomState.current.viewX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+          zoomState.current.viewY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+          setZoom(Math.min(15, Math.max(0.001, zoomState.current.touchStartZoom * (dist / zoomState.current.touchStartDist))));
         }
       };
-
-      const handleTouchEnd = () => { touchStartDist.current = 0; setIsPinching(false); };
 
       const handleSave = async () => {
         if (!completedCrop || !imgRef.current || editingIdx === null) return;
@@ -186,37 +153,13 @@
         const canvas = document.createElement('canvas');
         const scaleX = image.naturalWidth / image.width;
         const scaleY = image.naturalHeight / image.height;
-        canvas.width = Math.ceil(completedCrop.width * scaleX);
-        canvas.height = Math.ceil(completedCrop.height * scaleY);
+        canvas.width = Math.ceil(completedCrop.width * scaleX); canvas.height = Math.ceil(completedCrop.height * scaleY);
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(image, completedCrop.x * scaleX, completedCrop.y * scaleY, completedCrop.width * scaleX, completedCrop.height * scaleY, 0, 0, canvas.width, canvas.height);
         const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
         setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropped: URL.createObjectURL(blob), cropConfig: { crop: { ...crop }, aspect } } : img));
         setIsProcessing(false); setEditingIdx(null);
-      };
-
-      const handleApplyAll = async () => {
-        if (!completedCrop || !imgRef.current) return;
-        setIsProcessing(true);
-        const sourceImg = imgRef.current;
-        const xP = (completedCrop.x / sourceImg.width) * 100;
-        const yP = (completedCrop.y / sourceImg.height) * 100;
-        const wP = (completedCrop.width / sourceImg.width) * 100;
-        const hP = (completedCrop.height / sourceImg.height) * 100;
-        const updated = await Promise.all(images.map(async (img) => {
-          const tempImg = new Image(); tempImg.src = img.url;
-          await new Promise(r => tempImg.onload = r);
-          const pxCrop = { x: (xP * tempImg.naturalWidth) / 100, y: (yP * tempImg.naturalHeight) / 100, width: (wP * tempImg.naturalWidth) / 100, height: (hP * tempImg.naturalHeight) / 100 };
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.ceil(pxCrop.width); canvas.height = Math.ceil(pxCrop.height);
-          const ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(tempImg, pxCrop.x, pxCrop.y, pxCrop.width, pxCrop.height, 0, 0, canvas.width, canvas.height);
-          const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
-          return { ...img, cropped: URL.createObjectURL(blob), cropConfig: { crop: { unit: '%', x: xP, y: yP, width: wP, height: hP }, aspect } };
-        }));
-        setImages(updated); setIsProcessing(false); alert('הוחל על הכל!');
       };
 
       return (
@@ -229,16 +172,11 @@
           </header>
           <main className="flex-1 p-5 md:p-10 max-w-6xl mx-auto w-full" style={{ direction: 'rtl' }}>
             {images.length === 0 ? (
-              <div onClick={() => fileInputRef.current.click()} className="min-h-[40vh] bg-white border-4 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center cursor-pointer">
-                <Plus size={48} className="text-indigo-600 mb-4"/>
-                <h2 className="text-xl font-bold">העלאת תמונות</h2>
-              </div>
+              <div onClick={() => fileInputRef.current.click()} className="min-h-[40vh] bg-white border-4 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center cursor-pointer"><Plus size={48} className="text-indigo-600 mb-4"/><h2 className="text-xl font-bold">העלאת תמונות</h2></div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {images.map((img, idx) => (
-                  <div key={img.id} onClick={() => setEditingIdx(idx)} className={`img-grid-item ${img.cropped ? 'done' : ''}`}>
-                    <img src={img.cropped || img.url} className="w-full h-full object-cover" />
-                  </div>
+                  <div key={img.id} onClick={() => setEditingIdx(idx)} className={`img-grid-item ${img.cropped ? 'done' : ''}`}><img src={img.cropped || img.url} className="w-full h-full object-cover" /></div>
                 ))}
                 <div onClick={() => fileInputRef.current.click()} className="img-grid-item border-4 border-dashed border-slate-200 flex items-center justify-center text-slate-300"><Plus size={32}/></div>
               </div>
@@ -246,21 +184,15 @@
           </main>
           <input type="file" ref={fileInputRef} multiple accept="image/*" className="hidden" onChange={e => handleAddImages(e.target.files)} />
           {editingIdx !== null && (
-            <div className="editor-overlay ltr-force">
-              <div className="flex items-center justify-between px-6 h-14 bg-black/40 shrink-0">
-                <div className="flex items-center gap-4">
-                  <span className="text-white/60 font-black text-xs">{editingIdx + 1} / {images.length}</span>
-                  <div className="flex items-center bg-white/10 p-1 rounded-xl">
-                    <button onClick={() => setIsPanMode(false)} className={`p-2 rounded-lg ${!isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><MousePointer2 size={18}/></button>
-                    <button onClick={() => setIsPanMode(true)} className={`p-2 rounded-lg ${isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><Move size={18}/></button>
-                  </div>
-                </div>
+            <div className={`editor-overlay ltr-force ${isPinching ? 'is-pinching' : ''}`}>
+              <div className="flex items-center justify-between px-6 h-14 bg-black/60 shrink-0 backdrop-blur-md">
+                <div className="flex items-center gap-4"><span className="text-white/80 font-black text-sm">{editingIdx + 1} / {images.length}</span><div className="flex items-center bg-white/10 p-1 rounded-2xl"><button onClick={() => setIsPanMode(false)} className={`p-2 rounded-xl ${!isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><MousePointer2 size={18}/></button><button onClick={() => setIsPanMode(true)} className={`p-2 rounded-xl ${isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><Move size={18}/></button></div></div>
                 <button onClick={() => setEditingIdx(null)} className="text-white/50 p-2"><X size={32}/></button>
               </div>
-              <div className={`image-viewport ${isPanMode ? 'pan-mode' : ''} ${isPinching || isPanMode ? 'disable-crop' : ''}`} ref={viewportRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+              <div className="image-viewport" ref={viewportRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={() => { zoomState.current.isPinching = false; setIsPinching(false); }}>
                 <div className="image-container">
                   <ReactCrop crop={crop} onChange={(c) => setCrop(c)} onComplete={(c) => setCompletedCrop(c)} aspect={aspect} disabled={isPanMode || isPinching}>
-                    <img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false} className="crop-target-img shadow-2xl" style={{ width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto' }} />
+                    <img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false} className="crop-target-img shadow-2xl" style={{ width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto', height: imgRef.current ? `${imgRef.current.naturalHeight * zoom}px` : 'auto' }} />
                   </ReactCrop>
                 </div>
               </div>
@@ -268,20 +200,15 @@
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-between max-w-6xl mx-auto">
                   <div className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-full">
                      {[{l:'חופשי',v:undefined},{l:'1:1',v:1},{l:'16:9',v:16/9},{l:'9:16',v:9/16},{l:'4:5',v:0.8}].map(a=>(
-                       <button key={a.l} onClick={()=>handleAspectChange(a.v)} className={`aspect-chip ${aspect===a.v?'active':''}`}>{a.l}</button>
+                       <button key={a.l} onClick={()=>setAspect(a.v)} className={`aspect-chip ${aspect===a.v?'active':''}`}>{a.l}</button>
                      ))}
                   </div>
                   <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                    <div className="flex items-center gap-1 bg-white/10 p-1 rounded-xl">
-                      <button onClick={()=>setZoom(z=>Math.max(0.01,z-0.05))} className="p-2 text-white/50"><ZoomOut size={18}/></button>
-                      <button onClick={fitToViewport} className="p-2 text-white/50"><Maximize size={18}/></button>
-                      <button onClick={()=>setZoom(z=>Math.min(5,z+0.05))} className="p-2 text-white/50"><ZoomIn size={18}/></button>
-                    </div>
+                    <div className="flex items-center gap-1 bg-white/10 p-1 rounded-2xl"><button onClick={()=>setZoom(z=>Math.max(0.001,z*0.8))} className="p-2 text-white/50"><ZoomOut size={18}/></button><button onClick={fitToViewport} className="p-2 text-white/50"><Maximize size={18}/></button><button onClick={()=>setZoom(z=>Math.min(15,z*1.2))} className="p-2 text-white/50"><ZoomIn size={18}/></button></div>
                     <div className="flex items-center gap-2">
-                      <button onClick={handleApplyAll} className="hidden md:block bg-indigo-500/10 text-indigo-400 font-bold text-xs px-4 py-2 rounded-xl border border-indigo-500/20">החל על הכל</button>
-                      <button onClick={()=>setEditingIdx(i=>Math.max(0,i-1))} disabled={editingIdx===0} className="p-2 text-white/20"><ChevronRight size={32}/></button>
+                      <button onClick={()=>setEditingIdx(i=>Math.max(0,i-1))} disabled={editingIdx===0} className="p-2 text-white/20"><ChevronRight size={36}/></button>
                       <button onClick={handleSave} disabled={isProcessing} className="bg-indigo-600 text-white px-8 h-12 rounded-2xl font-black min-w-[120px] text-sm">שמור חיתוך</button>
-                      <button onClick={()=>setEditingIdx(i=>Math.min(images.length-1,i+1))} disabled={editingIdx===images.length-1} className="p-2 text-white/20"><ChevronLeft size={32}/></button>
+                      <button onClick={()=>setEditingIdx(i=>Math.min(images.length-1,i+1))} disabled={editingIdx===images.length-1} className="p-2 text-white/20"><ChevronLeft size={36}/></button>
                     </div>
                   </div>
                 </div>
