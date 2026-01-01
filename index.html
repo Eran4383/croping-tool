@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.6.3</title>
+  <title>Bulk Crop Pro | v3.5.1</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,7 +19,6 @@
     
     .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; }
     
-    /* Area B - Optimized Screen Utilization */
     .image-viewport { 
       flex: 1; 
       display: flex; 
@@ -29,26 +28,18 @@
       background: #0a0a0a; 
       touch-action: pan-x pan-y;
       position: relative;
-      min-height: 0;
     }
     .image-viewport.pan-mode { cursor: grab; }
     .image-viewport.pan-mode:active { cursor: grabbing; }
     
-    /* Wrapper that ensures content stays centered when zooming */
-    .zoom-wrapper {
-      display: inline-block;
-      margin: auto;
-      padding: 20px;
-    }
-    
     .ReactCrop { direction: ltr !important; display: inline-block; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
     
+    /* Disable crop interaction when panning or pinching to prevent flicker */
     .disable-crop .ReactCrop__crop-selection,
     .disable-crop .ReactCrop__drag-elements,
     .disable-crop .ReactCrop__interaction-layer { pointer-events: none !important; }
 
-    /* Area C - Footer */
     .editor-footer { background: #111827; padding: 12px; border-top: 1px solid #374151; z-index: 10000; }
     @media (min-width: 768px) { .editor-footer { padding: 16px 40px; } }
     
@@ -93,7 +84,6 @@
       const [aspect, setAspect] = useState(undefined);
       const [isProcessing, setIsProcessing] = useState(false);
       const [zoom, setZoom] = useState(1);
-      const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 });
       const [isPanMode, setIsPanMode] = useState(false);
       const [isPinching, setIsPinching] = useState(false);
       
@@ -107,7 +97,7 @@
         const newImgs = Array.from(files).filter(f => f.type.startsWith('image/')).map(f => ({
           id: Math.random().toString(36).substr(2, 9),
           url: URL.createObjectURL(f),
-          name: f.name || `Image_${new Date().getTime()}`,
+          name: f.name || `Pasted Image ${new Date().toLocaleTimeString()}`,
           cropped: null,
           cropConfig: null
         }));
@@ -135,6 +125,7 @@
         if (editingIdx !== null) {
           document.body.classList.add('editor-open');
           setIsPanMode(false);
+          setZoom(1); 
           const currentImg = images[editingIdx];
           if (currentImg.cropConfig) {
             setCrop(currentImg.cropConfig.crop);
@@ -151,7 +142,6 @@
       const onImageLoad = (e) => {
         const { width, height, naturalWidth, naturalHeight } = e.currentTarget;
         imgRef.current = e.currentTarget;
-        setNaturalSize({ w: naturalWidth, h: naturalHeight });
         
         if (viewportRef.current) {
           const vw = viewportRef.current.clientWidth - 40;
@@ -201,11 +191,10 @@
         setAspect(newAspect);
         if (imgRef.current) {
           const { width, height } = imgRef.current;
-          const newCrop = newAspect === undefined ? 
+          setCrop(newAspect === undefined ? 
             { unit: '%', x: 0, y: 0, width: 100, height: 100 } : 
-            centerCrop(makeAspectCrop({ unit: '%', width: 90 }, newAspect, width, height), width, height);
-          setCrop(newCrop);
-          setCompletedCrop(newCrop);
+            centerCrop(makeAspectCrop({ unit: '%', width: 90 }, newAspect, width, height), width, height)
+          );
         }
       };
 
@@ -216,20 +205,14 @@
         const canvas = document.createElement('canvas');
         const scaleX = image.naturalWidth / image.width;
         const scaleY = image.naturalHeight / image.height;
-        
-        const cX = (completedCrop.x * image.width) / (completedCrop.unit === '%' ? 100 : 1);
-        const cY = (completedCrop.y * image.height) / (completedCrop.unit === '%' ? 100 : 1);
-        const cW = (completedCrop.width * image.width) / (completedCrop.unit === '%' ? 100 : 1);
-        const cH = (completedCrop.height * image.height) / (completedCrop.unit === '%' ? 100 : 1);
-
-        canvas.width = Math.ceil(cW * scaleX);
-        canvas.height = Math.ceil(cH * scaleY);
+        canvas.width = Math.ceil(completedCrop.width * scaleX);
+        canvas.height = Math.ceil(completedCrop.height * scaleY);
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(image, cX * scaleX, cY * scaleY, cW * scaleX, cH * scaleY, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, completedCrop.x * scaleX, completedCrop.y * scaleY, completedCrop.width * scaleX, completedCrop.height * scaleY, 0, 0, canvas.width, canvas.height);
         const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
         setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropped: URL.createObjectURL(blob), cropConfig: { crop: { ...crop }, aspect } } : img));
         setIsProcessing(false);
@@ -313,9 +296,7 @@
 
           {editingIdx !== null && (
             <div className="editor-overlay ltr-force">
-              {/* Area A - Top bar */}
               <div className="flex items-center justify-between px-6 h-14 bg-black/40 shrink-0">
-                <button onClick={() => setEditingIdx(null)} className="text-white/50 p-2 hover:text-white transition-colors"><X size={32}/></button>
                 <div className="flex items-center gap-4">
                   <span className="text-white/60 font-black text-xs">{editingIdx + 1} / {images.length}</span>
                   <div className="flex items-center bg-white/10 p-1 rounded-xl">
@@ -323,15 +304,15 @@
                     <button onClick={() => setIsPanMode(true)} className={`p-2 rounded-lg ${isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`} title="הזז תמונה"><Move size={18}/></button>
                   </div>
                 </div>
+                <button onClick={() => setEditingIdx(null)} className="text-white/50 p-2 hover:text-white transition-colors"><X size={32}/></button>
               </div>
 
-              {/* Area B - Centered Zoom */}
               <div className={`image-viewport ${isPanMode ? 'pan-mode' : ''} ${isPinching || isPanMode ? 'disable-crop' : ''}`} 
                    ref={viewportRef}
                    onTouchStart={handleTouchStart} 
                    onTouchMove={handleTouchMove} 
                    onTouchEnd={handleTouchEnd}>
-                <div className="zoom-wrapper">
+                <div style={{ display: 'inline-block', padding: '100px' }}>
                   <ReactCrop 
                     crop={crop} 
                     onChange={(c) => setCrop(c)} 
@@ -344,36 +325,29 @@
                       src={images[editingIdx].url} 
                       onLoad={onImageLoad} 
                       draggable={false} 
-                      className="select-none shadow-2xl block"
+                      className="select-none shadow-2xl"
                       style={{ 
-                        width: naturalSize.w > 0 ? `${naturalSize.w * zoom}px` : 'auto',
-                        maxWidth: 'none'
+                        width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto',
+                        display: 'block'
                       }}
                     />
                   </ReactCrop>
                 </div>
               </div>
 
-              {/* Area C - Footer */}
               <div className="editor-footer" style={{ direction: 'rtl' }}>
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-between max-w-6xl mx-auto">
                   <div className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-full pb-1">
-                     {[
-                        {l:'חופשי',v:undefined},
-                        {l:'1:1',v:1},
-                        {l:'16:9',v:16/9},
-                        {l:'9:16',v:9/16},
-                        {l:'4:5',v:0.8}
-                      ].map(a=>(
+                     {[{l:'חופשי',v:undefined},{l:'1:1',v:1},{l:'16:9',v:16/9},{l:'9:16',v:9/16},{l:'4:5',v:0.8}].map(a=>(
                        <button key={a.l} onClick={()=>handleAspectChange(a.v)} className={`aspect-chip ${aspect===a.v?'active':''}`}>{a.l}</button>
                      ))}
                   </div>
 
                   <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
                     <div className="flex items-center gap-1 bg-white/10 p-1 rounded-xl">
-                      <button onClick={()=>setZoom(z=>Math.max(0.01,z-0.05))} className="p-2 text-white/50 hover:text-white transition-colors"><ZoomOut size={18}/></button>
+                      <button onClick={()=>setZoom(z=>Math.max(0.01,z-0.05))} className="p-2 text-white/50 hover:text-white"><ZoomOut size={18}/></button>
                       <span className="text-white/40 text-[10px] font-bold min-w-[45px] text-center">{Math.round(zoom * 100)}%</span>
-                      <button onClick={()=>setZoom(z=>Math.min(5,z+0.05))} className="p-2 text-white/50 hover:text-white transition-colors"><ZoomIn size={18}/></button>
+                      <button onClick={()=>setZoom(z=>Math.min(5,z+0.05))} className="p-2 text-white/50 hover:text-white"><ZoomIn size={18}/></button>
                     </div>
                     
                     <div className="flex items-center gap-2">
@@ -385,6 +359,7 @@
                       <button onClick={()=>setEditingIdx(i=>Math.min(images.length-1,i+1))} disabled={editingIdx===images.length-1} className="p-2 text-white/20 hover:text-white disabled:opacity-0 transition-colors"><ChevronLeft size={32}/></button>
                     </div>
                   </div>
+                  <button onClick={handleApplyAll} className="md:hidden w-full bg-indigo-500/10 text-indigo-400 font-bold text-xs py-2 rounded-xl border border-indigo-500/20">החל הגדרות חיתוך על כל התמונות</button>
                 </div>
               </div>
             </div>
