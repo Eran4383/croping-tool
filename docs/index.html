@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | Standalone Demo | v3.6.5</title>
+  <title>Bulk Crop Pro | Standalone Demo | v3.6.6</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,7 +18,7 @@
     .ltr-force { direction: ltr !important; }
     .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; }
     .image-viewport { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; background: #0a0a0a; touch-action: pan-x pan-y; position: relative; min-height: 0; }
-    .zoom-inner-wrapper { display: inline-block; margin: auto; padding: 40px; }
+    .zoom-inner-wrapper { display: inline-block; margin: auto; padding: 10px; }
     .ReactCrop { direction: ltr !important; display: inline-block; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
     .disable-crop .ReactCrop__crop-selection, .disable-crop .ReactCrop__drag-elements { pointer-events: none !important; }
@@ -43,7 +43,7 @@
 <body>
   <div id="root"></div>
   <script type="text/babel" data-type="module" data-presets="react,typescript">
-    import React, { useState, useEffect, useRef, useCallback } from 'react';
+    import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
     import { createRoot } from 'react-dom/client';
     import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2 } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
@@ -77,8 +77,8 @@
         imgRef.current = e.currentTarget;
         setNaturalSize({ w: naturalWidth, h: naturalHeight });
         if (viewportRef.current) {
-          const vw = viewportRef.current.clientWidth - 80;
-          const vh = viewportRef.current.clientHeight - 80;
+          const vw = viewportRef.current.clientWidth - 20;
+          const vh = viewportRef.current.clientHeight - 20;
           setZoom(Math.min(vw / naturalWidth, vh / naturalHeight));
         }
         setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
@@ -115,10 +115,16 @@
         setIsProcessing(false); setEditingIdx(null);
       };
 
+      const imageStyle = useMemo(() => ({
+        width: naturalSize.w > 0 ? `${naturalSize.w * zoom}px` : 'auto',
+        maxWidth: 'none',
+        display: 'block'
+      }), [naturalSize.w, zoom]);
+
       return (
         <div className="min-h-screen flex flex-col ltr-force">
           <header className="h-16 bg-white border-b px-6 flex items-center justify-between" style={{ direction: 'rtl' }}>
-            <h1 className="font-extrabold text-lg">Bulk Crop Pro</h1>
+            <h1 className="font-extrabold text-lg">Bulk Crop Pro <span className="text-indigo-400 font-normal text-sm ml-1">v3.6.6</span></h1>
             {images.length > 0 && <button onClick={() => setImages([])} className="text-red-500 font-bold text-sm">נקה הכל</button>}
           </header>
           <main className="flex-1 p-5" style={{ direction: 'rtl' }}>
@@ -140,6 +146,7 @@
               <div className="h-14 flex items-center justify-between px-6 bg-black/40">
                 <button onClick={() => setEditingIdx(null)} className="order-first"><X size={32} className="text-white/50"/></button>
                 <div className="flex gap-2 order-last">
+                   <span className="text-white/40 text-[10px] self-center">v3.6.6</span>
                    <button onClick={() => setIsPanMode(false)} className={`p-2 rounded ${!isPanMode ? 'bg-indigo-500' : ''}`}><MousePointer2 size={18} className="text-white"/></button>
                    <button onClick={() => setIsPanMode(true)} className={`p-2 rounded ${isPanMode ? 'bg-indigo-500' : ''}`}><Move size={18} className="text-white"/></button>
                 </div>
@@ -147,7 +154,7 @@
               <div className={`image-viewport ${isPanMode ? 'pan-mode disable-crop' : ''}`} ref={viewportRef}>
                 <div className="zoom-inner-wrapper">
                   <ReactCrop crop={crop} onChange={c => setCrop(c)} onComplete={c => setCompletedCrop(c)} aspect={aspect} disabled={isPanMode}>
-                    <img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} style={{ width: `${naturalSize.w * zoom}px`, maxWidth: 'none' }} />
+                    <img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} style={imageStyle} />
                   </ReactCrop>
                 </div>
               </div>
@@ -157,9 +164,9 @@
                        {['חופשי','1:1','16:9','9:16'].map((l,i)=><button key={l} onClick={()=>handleAspectChange([undefined,1,16/9,9/16][i])} className={`aspect-chip ${[undefined,1,16/9,9/16][i]===aspect?'active':''}`}>{l}</button>)}
                     </div>
                     <div className="flex items-center gap-4">
-                       <button onClick={()=>setZoom(z=>Math.max(0.01,z-0.05))}><ZoomOut size={18} className="text-white/50"/></button>
+                       <button onClick={()=>setZoom(z=>Math.max(0.01,z-0.1))}><ZoomOut size={18} className="text-white/50"/></button>
                        <span className="text-white/40 text-xs">{Math.round(zoom*100)}%</span>
-                       <button onClick={()=>setZoom(z=>Math.min(5,z+0.05))}><ZoomIn size={18} className="text-white/50"/></button>
+                       <button onClick={()=>setZoom(z=>Math.min(5,z+0.1))}><ZoomIn size={18} className="text-white/50"/></button>
                        <button onClick={handleSave} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold">שמור</button>
                     </div>
                  </div>
