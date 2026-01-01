@@ -161,7 +161,18 @@
         }
       };
 
-      const handleTouchMove = (e) => { if (e.touches.length === 2 && zoomState.current.isPinching) { e.preventDefault(); const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); setZoom(Math.min(20, Math.max(0.001, zoomState.current.touchStartZoom * (dist / zoomState.current.touchStartDist)))); } };
+      const handleTouchMove = (e) => {
+        if (e.touches.length === 2 && zoomState.current.isPinching) {
+          e.preventDefault();
+          const rect = viewportRef.current.getBoundingClientRect();
+          const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+          const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+          const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+          const newZoom = Math.min(20, Math.max(0.001, zoomState.current.touchStartZoom * (dist / zoomState.current.touchStartDist)));
+          setZoom(newZoom);
+          applyZoomScroll(newZoom, zoomState.current.anchorX, zoomState.current.anchorY, midX, midY);
+        }
+      };
 
       const handleSave = async () => {
         if (!completedCrop || !imgRef.current || editingIdx === null) return;
