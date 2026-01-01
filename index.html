@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.6.2</title>
+  <title>Bulk Crop Pro | v3.6.3</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,11 +19,12 @@
     
     .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; }
     
-    /* Area B - Optimized Screen Utilization and Centered Scroll */
+    /* Area B - Optimized Screen Utilization */
     .image-viewport { 
       flex: 1; 
-      display: grid;
-      place-items: center;
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
       overflow: auto; 
       background: #0a0a0a; 
       touch-action: pan-x pan-y;
@@ -36,7 +37,8 @@
     /* Wrapper that ensures content stays centered when zooming */
     .zoom-wrapper {
       display: inline-block;
-      padding: 10px; /* Minimal padding for edge handling */
+      margin: auto;
+      padding: 20px;
     }
     
     .ReactCrop { direction: ltr !important; display: inline-block; }
@@ -133,7 +135,6 @@
         if (editingIdx !== null) {
           document.body.classList.add('editor-open');
           setIsPanMode(false);
-          setZoom(1); 
           const currentImg = images[editingIdx];
           if (currentImg.cropConfig) {
             setCrop(currentImg.cropConfig.crop);
@@ -216,10 +217,10 @@
         const scaleX = image.naturalWidth / image.width;
         const scaleY = image.naturalHeight / image.height;
         
-        const cX = completedCrop.unit === '%' ? (completedCrop.x * image.width / 100) : completedCrop.x;
-        const cY = completedCrop.unit === '%' ? (completedCrop.y * image.height / 100) : completedCrop.y;
-        const cW = completedCrop.unit === '%' ? (completedCrop.width * image.width / 100) : completedCrop.width;
-        const cH = completedCrop.unit === '%' ? (completedCrop.height * image.height / 100) : completedCrop.height;
+        const cX = (completedCrop.x * image.width) / (completedCrop.unit === '%' ? 100 : 1);
+        const cY = (completedCrop.y * image.height) / (completedCrop.unit === '%' ? 100 : 1);
+        const cW = (completedCrop.width * image.width) / (completedCrop.unit === '%' ? 100 : 1);
+        const cH = (completedCrop.height * image.height) / (completedCrop.unit === '%' ? 100 : 1);
 
         canvas.width = Math.ceil(cW * scaleX);
         canvas.height = Math.ceil(cH * scaleY);
@@ -312,7 +313,7 @@
 
           {editingIdx !== null && (
             <div className="editor-overlay ltr-force">
-              {/* Area A - Top bar (X on right, count/tools on left in RTL) */}
+              {/* Area A - Top bar */}
               <div className="flex items-center justify-between px-6 h-14 bg-black/40 shrink-0">
                 <button onClick={() => setEditingIdx(null)} className="text-white/50 p-2 hover:text-white transition-colors"><X size={32}/></button>
                 <div className="flex items-center gap-4">
@@ -324,7 +325,7 @@
                 </div>
               </div>
 
-              {/* Area B - Optimized Viewport with Centered Zoom */}
+              {/* Area B - Centered Zoom */}
               <div className={`image-viewport ${isPanMode ? 'pan-mode' : ''} ${isPinching || isPanMode ? 'disable-crop' : ''}`} 
                    ref={viewportRef}
                    onTouchStart={handleTouchStart} 
@@ -353,7 +354,7 @@
                 </div>
               </div>
 
-              {/* Area C - Footer Control Bar */}
+              {/* Area C - Footer */}
               <div className="editor-footer" style={{ direction: 'rtl' }}>
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-between max-w-6xl mx-auto">
                   <div className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-full pb-1">
@@ -384,7 +385,6 @@
                       <button onClick={()=>setEditingIdx(i=>Math.min(images.length-1,i+1))} disabled={editingIdx===images.length-1} className="p-2 text-white/20 hover:text-white disabled:opacity-0 transition-colors"><ChevronLeft size={32}/></button>
                     </div>
                   </div>
-                  <button onClick={handleApplyAll} className="md:hidden w-full bg-indigo-500/10 text-indigo-400 font-bold text-xs py-2 rounded-xl border border-indigo-500/20">החל הגדרות חיתוך על כל התמונות</button>
                 </div>
               </div>
             </div>
