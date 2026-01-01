@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v4.2.0</title>
+  <title>Bulk Crop Pro | v4.2.1</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,7 +14,6 @@
   <style>
     :root { --primary: #4f46e5; --accent: #10b981; }
     
-    /* Global scrollbar styling - visible but subtle */
     * { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
     *::-webkit-scrollbar { width: 6px; height: 6px; }
     *::-webkit-scrollbar-track { background: transparent; }
@@ -26,7 +25,7 @@
       color: #0f172a; 
       margin: 0; 
       height: 100vh;
-      overflow: hidden; /* App container handles scrolling */
+      overflow: hidden; 
       -webkit-tap-highlight-color: transparent; 
     }
     
@@ -138,7 +137,7 @@
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
     import { jsPDF } from 'jspdf';
 
-    const VERSION = "v4.2.0";
+    const VERSION = "v4.2.1";
     const PADDING = 2000;
 
     const App = () => {
@@ -545,7 +544,6 @@
             </div>
           </main>
 
-          {/* Floating Global Format Selector */}
           {images.length > 0 && editingIdx === null && (
             <div className="format-selector-floating bg-white border border-slate-200 p-2 rounded-2xl flex items-center gap-2" style={{ direction: 'rtl' }}>
                <div className="bg-indigo-50 p-2 rounded-xl text-indigo-600">
