@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | Standalone Demo</title>
+  <title>Bulk Crop Pro | Standalone Demo | v3.6.2</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,8 +17,8 @@
     body.editor-open { overflow: hidden; height: 100vh; position: fixed; width: 100%; }
     .ltr-force { direction: ltr !important; }
     .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; }
-    .image-viewport { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; background: #0a0a0a; touch-action: pan-x pan-y; position: relative; min-height: 0; }
-    .zoom-wrapper { display: inline-flex; margin: auto; padding: 20px; }
+    .image-viewport { flex: 1; display: grid; place-items: center; overflow: auto; background: #0a0a0a; touch-action: pan-x pan-y; position: relative; min-height: 0; }
+    .zoom-wrapper { display: inline-block; padding: 10px; }
     .ReactCrop { direction: ltr !important; display: inline-block; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
     .disable-crop .ReactCrop__crop-selection, .disable-crop .ReactCrop__drag-elements { pointer-events: none !important; }
@@ -102,11 +102,18 @@
         const scaleY = image.naturalHeight / image.height;
         const cX = completedCrop.unit === '%' ? (completedCrop.x * image.width / 100) : completedCrop.x;
         const cY = completedCrop.unit === '%' ? (completedCrop.y * image.height / 100) : completedCrop.y;
-        const cW = completedCrop.unit === '%' ? (completedCrop.width * image.width / 100) : completedCrop.width;
-        const cH = completedCrop.unit === '%' ? (completedCrop.height * image.height / 100) : completedCrop.height;
-        canvas.width = Math.ceil(cW * scaleX); canvas.height = Math.ceil(cH * scaleY);
+        const cW = completedCrop.width.unit === '%' ? (completedCrop.width * image.width / 100) : (completedCrop.width || image.width);
+        const cH = completedCrop.height.unit === '%' ? (completedCrop.height * image.height / 100) : (completedCrop.height || image.height);
+        
+        // Simple pixel calculation for standalone robustness
+        const finalW = completedCrop.unit === '%' ? (completedCrop.width * image.width / 100) : completedCrop.width;
+        const finalH = completedCrop.unit === '%' ? (completedCrop.height * image.height / 100) : completedCrop.height;
+        const finalX = completedCrop.unit === '%' ? (completedCrop.x * image.width / 100) : completedCrop.x;
+        const finalY = completedCrop.unit === '%' ? (completedCrop.y * image.height / 100) : completedCrop.y;
+
+        canvas.width = Math.ceil(finalW * scaleX); canvas.height = Math.ceil(finalH * scaleY);
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(image, cX * scaleX, cY * scaleY, cW * scaleX, cH * scaleY, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, finalX * scaleX, finalY * scaleY, finalW * scaleX, finalH * scaleY, 0, 0, canvas.width, canvas.height);
         const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
         setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropped: URL.createObjectURL(blob), cropConfig: { crop, aspect } } : img));
         setIsProcessing(false); setEditingIdx(null);
@@ -116,6 +123,9 @@
         <div className="min-h-screen flex flex-col ltr-force">
           <header className="h-16 bg-white border-b px-6 flex items-center justify-between" style={{ direction: 'rtl' }}>
             <h1 className="font-extrabold text-lg">Bulk Crop Pro</h1>
+            {images.length > 0 && (
+              <button onClick={() => setImages([])} className="text-red-500 font-bold text-sm">נקה הכל</button>
+            )}
           </header>
           <main className="flex-1 p-5" style={{ direction: 'rtl' }}>
             {images.length === 0 ? (
