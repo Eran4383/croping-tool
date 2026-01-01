@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.6.1</title>
+  <title>Bulk Crop Pro | v3.6.0</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,13 +32,13 @@
     .image-viewport.pan-mode:active { cursor: grabbing; }
     
     .image-container {
-      padding: 100px; /* Space for crop handles at zoom levels */
+      padding: 40px; /* Reduced padding to maximize workspace */
       display: inline-block;
       margin: auto;
     }
 
     .crop-target-img {
-      transition: width 0.1s ease-out;
+      transition: width 0.15s ease-out;
       display: block;
       user-select: none;
       -webkit-user-drag: none;
@@ -133,12 +133,13 @@
         return () => window.removeEventListener('paste', handlePaste);
       }, [handleAddImages]);
 
+      // Logic to fit image to viewport
       const fitToViewport = useCallback(() => {
         if (!viewportRef.current || !imgRef.current) return;
         const viewport = viewportRef.current;
         const img = imgRef.current;
         
-        const vw = viewport.clientWidth - 80;
+        const vw = viewport.clientWidth - 80; // Margin
         const vh = viewport.clientHeight - 80;
         
         const ratio = Math.min(vw / img.naturalWidth, vh / img.naturalHeight);
@@ -146,6 +147,7 @@
         lastZoomRef.current = ratio;
       }, []);
 
+      // Re-fit on window resize
       useEffect(() => {
         if (editingIdx === null) return;
         const observer = new ResizeObserver(() => fitToViewport());
@@ -153,7 +155,7 @@
         return () => observer.disconnect();
       }, [editingIdx, fitToViewport]);
 
-      // Improved Center-anchored zoom logic
+      // Center-anchored zoom logic
       useEffect(() => {
         if (!viewportRef.current || !imgRef.current) return;
         const viewport = viewportRef.current;
@@ -165,12 +167,9 @@
           const vw = viewport.clientWidth;
           const vh = viewport.clientHeight;
 
-          // The center of the viewport relative to the scrollable content
           const centerX = scrollX + vw / 2;
           const centerY = scrollY + vh / 2;
 
-          // After zoom, this relative point is scaled by delta
-          // We adjust the scroll position to keep that point at the viewport center
           viewport.scrollLeft = (centerX * delta) - (vw / 2);
           viewport.scrollTop = (centerY * delta) - (vh / 2);
         }
