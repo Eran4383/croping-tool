@@ -17,9 +17,9 @@
     body.editor-open { overflow: hidden; height: 100vh; position: fixed; width: 100%; }
     .ltr-force { direction: ltr !important; }
     .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; }
-    .image-viewport { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; background: #0a0a0a; touch-action: pan-x pan-y; position: relative; padding: 20px; }
-    .zoom-container { display: flex; align-items: center; justify-content: center; min-width: 100%; min-height: 100%; }
-    .ReactCrop { direction: ltr !important; display: inline-block; margin: auto; }
+    .image-viewport { flex: 1; display: flex; align-items: center; justify-content: center; overflow: auto; background: #0a0a0a; touch-action: pan-x pan-y; position: relative; min-height: 0; }
+    .zoom-wrapper { display: inline-flex; margin: auto; padding: 20px; }
+    .ReactCrop { direction: ltr !important; display: inline-block; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
     .disable-crop .ReactCrop__crop-selection, .disable-crop .ReactCrop__drag-elements { pointer-events: none !important; }
     .editor-footer { background: #111827; padding: 12px; border-top: 1px solid #374151; z-index: 10000; }
@@ -75,6 +75,7 @@
 
       const onImageLoad = (e) => {
         const { width, height, naturalWidth, naturalHeight } = e.currentTarget;
+        imgRef.current = e.currentTarget;
         setNaturalSize({ w: naturalWidth, h: naturalHeight });
         if (viewportRef.current) {
           const vw = viewportRef.current.clientWidth - 40;
@@ -99,11 +100,11 @@
         const canvas = document.createElement('canvas');
         const scaleX = image.naturalWidth / image.width;
         const scaleY = image.naturalHeight / image.height;
-        const cX = (completedCrop.x * image.width) / 100;
-        const cY = (completedCrop.y * image.height) / 100;
-        const cW = (completedCrop.width * image.width) / 100;
-        const cH = (completedCrop.height * image.height) / 100;
-        canvas.width = cW * scaleX; canvas.height = cH * scaleY;
+        const cX = completedCrop.unit === '%' ? (completedCrop.x * image.width / 100) : completedCrop.x;
+        const cY = completedCrop.unit === '%' ? (completedCrop.y * image.height / 100) : completedCrop.y;
+        const cW = completedCrop.unit === '%' ? (completedCrop.width * image.width / 100) : completedCrop.width;
+        const cH = completedCrop.unit === '%' ? (completedCrop.height * image.height / 100) : completedCrop.height;
+        canvas.width = Math.ceil(cW * scaleX); canvas.height = Math.ceil(cH * scaleY);
         const ctx = canvas.getContext('2d');
         ctx.drawImage(image, cX * scaleX, cY * scaleY, cW * scaleX, cH * scaleY, 0, 0, canvas.width, canvas.height);
         const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
@@ -126,7 +127,6 @@
                     <img src={img.cropped || img.url} className="w-full h-full object-cover" />
                   </div>
                 ))}
-                <div onClick={() => document.getElementById('f').click()} className="img-grid-item bg-slate-100 flex items-center justify-center">+</div>
               </div>
             )}
           </main>
@@ -134,14 +134,14 @@
           {editingIdx !== null && (
             <div className="editor-overlay ltr-force">
               <div className="h-14 flex items-center justify-between px-6 bg-black/40">
-                <div className="flex items-center gap-2">
+                <button onClick={() => setEditingIdx(null)}><X size={32} className="text-white/50"/></button>
+                <div className="flex gap-2">
                    <button onClick={() => setIsPanMode(false)} className={`p-2 rounded ${!isPanMode ? 'bg-indigo-500' : ''}`}><MousePointer2 size={18} className="text-white"/></button>
                    <button onClick={() => setIsPanMode(true)} className={`p-2 rounded ${isPanMode ? 'bg-indigo-500' : ''}`}><Move size={18} className="text-white"/></button>
                 </div>
-                <button onClick={() => setEditingIdx(null)}><X size={32} className="text-white/50"/></button>
               </div>
               <div className={`image-viewport ${isPanMode ? 'pan-mode disable-crop' : ''}`} ref={viewportRef}>
-                <div className="zoom-container">
+                <div className="zoom-wrapper">
                   <ReactCrop crop={crop} onChange={c => setCrop(c)} onComplete={c => setCompletedCrop(c)} aspect={aspect} disabled={isPanMode}>
                     <img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} style={{ width: `${naturalSize.w * zoom}px`, maxWidth: 'none' }} />
                   </ReactCrop>
@@ -149,15 +149,13 @@
               </div>
               <div className="editor-footer" style={{ direction: 'rtl' }}>
                  <div className="flex items-center justify-between max-w-6xl mx-auto flex-wrap gap-4">
-                    <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                       {['חופשי','1:1','16:9','9:16'].map((l,i)=><button key={l} onClick={()=>handleAspectChange([undefined,1,16/9,9/16][i])} className={`aspect-chip ${[undefined,1,16/9,9/16][i]===aspect?'active':''}`}>{l}</button>)}
+                    <div className="flex gap-2">
+                       {['חופשי','1:1','16:9'].map((l,i)=><button key={l} onClick={()=>handleAspectChange([undefined,1,16/9][i])} className={`aspect-chip ${[undefined,1,16/9][i]===aspect?'active':''}`}>{l}</button>)}
                     </div>
                     <div className="flex items-center gap-4">
-                       <div className="flex items-center gap-1 bg-white/10 p-1 rounded-xl">
-                          <button onClick={()=>setZoom(z=>Math.max(0.01,z-0.05))} className="p-2 text-white/50"><ZoomOut size={18}/></button>
-                          <span className="text-white/40 text-xs w-12 text-center">{Math.round(zoom*100)}%</span>
-                          <button onClick={()=>setZoom(z=>Math.min(5,z+0.05))} className="p-2 text-white/50"><ZoomIn size={18}/></button>
-                       </div>
+                       <button onClick={()=>setZoom(z=>Math.max(0.01,z-0.05))}><ZoomOut size={18} className="text-white/50"/></button>
+                       <span className="text-white/40 text-xs">{Math.round(zoom*100)}%</span>
+                       <button onClick={()=>setZoom(z=>Math.min(5,z+0.05))}><ZoomIn size={18} className="text-white/50"/></button>
                        <button onClick={handleSave} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold">שמור</button>
                     </div>
                  </div>
