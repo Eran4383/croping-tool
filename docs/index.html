@@ -17,8 +17,8 @@
     body.editor-open { overflow: hidden; height: 100vh; position: fixed; width: 100%; }
     .ltr-force { direction: ltr !important; }
     .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; }
-    .image-viewport { flex: 1; display: grid; place-items: center; overflow: auto; background: #0a0a0a; touch-action: none; position: relative; overscroll-behavior: contain; }
-    .image-container { padding: 150px; display: inline-block; margin: auto; transform-origin: 0 0; }
+    .image-viewport { flex: 1; overflow: auto; background: #0a0a0a; touch-action: none; position: relative; overscroll-behavior: contain; display: block; }
+    .image-container { padding: 100vh 100vw; display: inline-block; transform-origin: 0 0; }
     .crop-target-img { display: block; user-select: none; transition: none !important; will-change: width, height; max-width: none !important; }
     .ReactCrop { direction: ltr !important; display: inline-block; transition: none !important; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
@@ -67,51 +67,50 @@
       const viewportRef = useRef(null);
       const zoomState = useRef({ lastZoom: 1, anchorX: 0, anchorY: 0, viewX: 0, viewY: 0, touchStartDist: 0, touchStartZoom: 1, isPinching: false });
 
+      const applyZoomScroll = useCallback((currentZoom, anchorX, anchorY, viewX, viewY) => {
+        if (!viewportRef.current) return;
+        viewportRef.current.scrollLeft = (anchorX * currentZoom) - viewX;
+        viewportRef.current.scrollTop = (anchorY * currentZoom) - viewY;
+      }, []);
+
       const updateZoomAnchor = useCallback((forceViewportCenter = false) => {
         if (!viewportRef.current || !imgRef.current) return;
         const viewport = viewportRef.current;
-        let targetX = viewport.scrollLeft + viewport.clientWidth / 2;
-        let targetY = viewport.scrollTop + viewport.clientHeight / 2;
+        let targetX, targetY;
+        const viewPosX = viewport.clientWidth / 2;
+        const viewPosY = viewport.clientHeight / 2;
+        const padX = window.innerWidth; const padY = window.innerHeight;
+
         if (!forceViewportCenter && completedCrop && completedCrop.width > 10 && completedCrop.height > 10) {
-          const containerPadding = 150;
-          targetX = (completedCrop.x + completedCrop.width / 2) * zoom + containerPadding;
-          targetY = (completedCrop.y + completedCrop.height / 2) * zoom + containerPadding;
+          targetX = (completedCrop.x + completedCrop.width / 2) * zoom + padX;
+          targetY = (completedCrop.y + completedCrop.height / 2) * zoom + padY;
+        } else {
+          targetX = (imgRef.current.width / 2) + padX;
+          targetY = (imgRef.current.height / 2) + padY;
         }
-        zoomState.current.viewX = viewport.clientWidth / 2; zoomState.current.viewY = viewport.clientHeight / 2;
+        zoomState.current.viewX = viewPosX; zoomState.current.viewY = viewPosY;
         zoomState.current.anchorX = targetX / zoom; zoomState.current.anchorY = targetY / zoom;
       }, [zoom, completedCrop]);
 
-      const handleAddImages = useCallback((files) => {
-        const newImgs = Array.from(files).filter(f => f.type.startsWith('image/')).map(f => ({
-          id: Math.random().toString(36).substr(2, 9), url: URL.createObjectURL(f), name: f.name || `Image`, cropped: null, cropConfig: null
-        }));
-        setImages(prev => [...prev, ...newImgs]);
-      }, []);
-
-      useEffect(() => {
-        const handlePaste = (e) => {
-          const items = e.clipboardData?.items; if (!items) return;
-          const files = []; for (const item of items) { if (item.type.indexOf('image') !== -1) { const file = item.getAsFile(); if (file) files.push(file); } }
-          if (files.length > 0) handleAddImages(files);
-        };
-        window.addEventListener('paste', handlePaste); return () => window.removeEventListener('paste', handlePaste);
-      }, [handleAddImages]);
-
       const fitToViewport = useCallback(() => {
         if (!viewportRef.current || !imgRef.current) return;
-        const ratio = Math.min((viewportRef.current.clientWidth - 80) / imgRef.current.naturalWidth, (viewportRef.current.clientHeight - 80) / imgRef.current.naturalHeight);
-        updateZoomAnchor(true); setZoom(ratio); zoomState.current.lastZoom = ratio;
-      }, [updateZoomAnchor]);
+        const ratio = Math.min((viewportRef.current.clientWidth - 40) / imgRef.current.naturalWidth, (viewportRef.current.clientHeight - 40) / imgRef.current.naturalHeight);
+        const padX = window.innerWidth; const padY = window.innerHeight;
+        const targetX = (imgRef.current.naturalWidth * ratio / 2) + padX;
+        const targetY = (imgRef.current.naturalHeight * ratio / 2) + padY;
+        zoomState.current.anchorX = targetX / ratio; zoomState.current.anchorY = targetY / ratio;
+        zoomState.current.viewX = viewportRef.current.clientWidth / 2; zoomState.current.viewY = viewportRef.current.clientHeight / 2;
+        setZoom(ratio); zoomState.current.lastZoom = ratio;
+        setTimeout(() => applyZoomScroll(ratio, zoomState.current.anchorX, zoomState.current.anchorY, zoomState.current.viewX, zoomState.current.viewY), 0);
+      }, [applyZoomScroll]);
 
       useLayoutEffect(() => {
         if (!viewportRef.current) return;
-        const delta = zoom / zoomState.current.lastZoom;
-        if (delta !== 1) {
-          viewportRef.current.scrollLeft = (zoomState.current.anchorX * zoom) - zoomState.current.viewX;
-          viewportRef.current.scrollTop = (zoomState.current.anchorY * zoom) - zoomState.current.viewY;
+        if (zoom !== zoomState.current.lastZoom) {
+          applyZoomScroll(zoom, zoomState.current.anchorX, zoomState.current.anchorY, zoomState.current.viewX, zoomState.current.viewY);
         }
         zoomState.current.lastZoom = zoom;
-      }, [zoom]);
+      }, [zoom, applyZoomScroll]);
 
       useEffect(() => {
         if (editingIdx !== null) { document.body.classList.add('editor-open'); setIsPanMode(false); const currentImg = images[editingIdx]; if (currentImg.cropConfig) { setCrop(currentImg.cropConfig.crop); setAspect(currentImg.cropConfig.aspect); } else { setAspect(undefined); setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 }); } }
@@ -134,7 +133,7 @@
         }
       };
 
-      const handleTouchMove = (e) => { if (e.touches.length === 2 && zoomState.current.isPinching) { e.preventDefault(); const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); setZoom(Math.min(15, Math.max(0.001, zoomState.current.touchStartZoom * (dist / zoomState.current.touchStartDist)))); } };
+      const handleTouchMove = (e) => { if (e.touches.length === 2 && zoomState.current.isPinching) { e.preventDefault(); const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); setZoom(Math.min(20, Math.max(0.001, zoomState.current.touchStartZoom * (dist / zoomState.current.touchStartDist)))); } };
 
       const handleSave = async () => {
         if (!completedCrop || !imgRef.current || editingIdx === null) return;
@@ -157,7 +156,7 @@
                 <div className="flex items-center gap-4"><span className="text-white/80 font-black text-sm">{editingIdx + 1} / {images.length}</span><div className="flex items-center bg-white/10 p-1 rounded-2xl"><button onClick={() => setIsPanMode(false)} className={`p-2 rounded-xl ${!isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><MousePointer2 size={18}/></button><button onClick={() => setIsPanMode(true)} className={`p-2 rounded-xl ${isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><Move size={18}/></button></div></div>
                 <button onClick={() => setEditingIdx(null)} className="text-white/50 p-2"><X size={32}/></button>
               </div>
-              <div className="image-viewport" ref={viewportRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={() => { zoomState.current.isPinching = false; setIsPinching(false); }} onWheel={(e) => { e.preventDefault(); updateZoomAnchor(); setZoom(z => Math.min(15, Math.max(0.001, z * (e.deltaY > 0 ? 0.9 : 1.1)))); }}>
+              <div className="image-viewport" ref={viewportRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={() => { zoomState.current.isPinching = false; setIsPinching(false); }} onWheel={(e) => { e.preventDefault(); updateZoomAnchor(); setZoom(z => Math.min(20, Math.max(0.001, z * (e.deltaY > 0 ? 0.9 : 1.1)))); }}>
                 <div className="image-container"><ReactCrop crop={crop} onChange={(c) => setCrop(c)} onComplete={(c) => setCompletedCrop(c)} aspect={aspect} disabled={isPanMode || isPinching}><img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false} className="crop-target-img shadow-2xl" style={{ width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto', height: imgRef.current ? `${imgRef.current.naturalHeight * zoom}px` : 'auto' }} /></ReactCrop></div>
               </div>
               <div className="editor-footer" style={{ direction: 'rtl' }}>
@@ -166,7 +165,7 @@
                      {[{l:'חופשי',v:undefined},{l:'1:1',v:1},{l:'16:9',v:16/9},{l:'9:16',v:9/16},{l:'4:5',v:0.8}].map(a=>(<button key={a.l} onClick={()=>setAspect(a.v)} className={`aspect-chip ${aspect===a.v?'active':''}`}>{a.l}</button>))}
                   </div>
                   <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                    <div className="flex items-center gap-1 bg-white/10 p-1 rounded-2xl"><button onClick={()=>{updateZoomAnchor(); setZoom(z=>Math.max(0.001,z*0.8))}} className="p-2 text-white/50"><ZoomOut size={18}/></button><button onClick={fitToViewport} className="p-2 text-white/50"><Maximize size={18}/></button><button onClick={()=>{updateZoomAnchor(); setZoom(z=>Math.min(15,z*1.2))}} className="p-2 text-white/50"><ZoomIn size={18}/></button></div>
+                    <div className="flex items-center gap-1 bg-white/10 p-1 rounded-2xl"><button onClick={()=>{updateZoomAnchor(); setZoom(z=>Math.max(0.001,z*0.8))}} className="p-2 text-white/50"><ZoomOut size={18}/></button><button onClick={fitToViewport} className="p-2 text-white/50"><Maximize size={18}/></button><button onClick={()=>{updateZoomAnchor(); setZoom(z=>Math.min(20,z*1.2))}} className="p-2 text-white/50"><ZoomIn size={18}/></button></div>
                     <div className="flex items-center gap-2">
                       <button onClick={()=>setEditingIdx(i=>Math.max(0,i-1))} disabled={editingIdx===0} className="p-2 text-white/20"><ChevronRight size={36}/></button>
                       <button onClick={handleSave} disabled={isProcessing} className="bg-indigo-600 text-white px-8 h-12 rounded-2xl font-black min-w-[120px] text-sm">שמור חיתוך</button>
