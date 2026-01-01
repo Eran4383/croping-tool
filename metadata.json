@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v3.7.0 - הוספת ניהול גרסאות ושיפורי זום מבוססי נקודת מגע (Midpoint Zoom).",
+  "description": "v3.7.1 - שיפור רספונסיביות של שורת הכפתורים והתאמה מלאה לכל סוגי המסכים ללא יצירת גלילה רוחבית.",
   "requestFramePermissions": []
 }
