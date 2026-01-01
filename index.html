@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.6.9</title>
+  <title>Bulk Crop Pro | v3.7.0</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,7 +34,7 @@
     .image-viewport.pan-mode:active { cursor: grabbing; }
     
     .image-container {
-      padding: 150px; /* Increased padding for better panning freedom */
+      padding: 150px; 
       flex-shrink: 0;
       display: flex;
       align-items: center;
@@ -94,6 +94,8 @@
     import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2, Maximize } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 
+    const VERSION = "v3.7.0";
+
     const App = () => {
       const [images, setImages] = useState([]);
       const [editingIdx, setEditingIdx] = useState(null);
@@ -121,36 +123,26 @@
         isPinching: false
       });
 
-      // Unified function to apply scroll based on zoom and anchor point
       const applyZoomScroll = useCallback((currentZoom, anchorX, anchorY, viewX, viewY) => {
         if (!viewportRef.current) return;
         const viewport = viewportRef.current;
-        // The formula: (Position in unscaled units * scale) - screen position
         viewport.scrollLeft = (anchorX * currentZoom) - viewX;
         viewport.scrollTop = (anchorY * currentZoom) - viewY;
       }, []);
 
-      // Update anchor point to center of screen or center of crop
       const updateZoomAnchor = useCallback((targetCenter = false) => {
         if (!viewportRef.current || !imgRef.current || !containerRef.current) return;
         const viewport = viewportRef.current;
-        
         const viewPosX = viewport.clientWidth / 2;
         const viewPosY = viewport.clientHeight / 2;
-
         let targetX, targetY;
-
-        // Coordinates are relative to containerRef (image start + padding)
         if (!targetCenter && completedCrop && completedCrop.width > 5 && completedCrop.height > 5) {
-          // Center on crop box
           targetX = (completedCrop.x + completedCrop.width / 2) * zoom + 150;
           targetY = (completedCrop.y + completedCrop.height / 2) * zoom + 150;
         } else {
-          // Center on image
           targetX = (imgRef.current.width / 2) + 150;
           targetY = (imgRef.current.height / 2) + 150;
         }
-
         zoomState.current.viewX = viewPosX;
         zoomState.current.viewY = viewPosY;
         zoomState.current.anchorX = targetX / zoom;
@@ -194,10 +186,8 @@
         const vw = viewport.clientWidth - 40;
         const vh = viewport.clientHeight - 40;
         const ratio = Math.min(vw / img.naturalWidth, vh / img.naturalHeight);
-        
         setZoom(ratio);
         zoomState.current.lastZoom = ratio;
-        
         requestAnimationFrame(() => {
            if (viewportRef.current) {
              viewportRef.current.scrollLeft = (viewportRef.current.scrollWidth - viewportRef.current.clientWidth) / 2;
@@ -214,12 +204,10 @@
             { unit: '%', x: 0, y: 0, width: 100, height: 100 } : 
             centerCrop(makeAspectCrop({ unit: '%', width: 90 }, newAspect, width, height), width, height);
           setCrop(newCrop);
-          // Auto-focus on new crop area
           setTimeout(() => updateZoomAnchor(false), 50);
         }
       };
 
-      // Handle Resize
       useEffect(() => {
         if (editingIdx === null) return;
         const observer = new ResizeObserver(() => {
@@ -229,15 +217,12 @@
         return () => observer.disconnect();
       }, [editingIdx, fitToViewport]);
 
-      // Sync scroll with zoom state
       useLayoutEffect(() => {
         if (!viewportRef.current || !imgRef.current) return;
         const { lastZoom, anchorX, anchorY, viewX, viewY } = zoomState.current;
-        
         if (zoom !== lastZoom) {
           applyZoomScroll(zoom, anchorX, anchorY, viewX, viewY);
         }
-        
         zoomState.current.lastZoom = zoom;
       }, [zoom, applyZoomScroll]);
 
@@ -280,17 +265,13 @@
           const t1 = e.touches[0];
           const t2 = e.touches[1];
           const dist = Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
-          
           const rect = viewportRef.current.getBoundingClientRect();
           const midX = (t1.clientX + t2.clientX) / 2 - rect.left;
           const midY = (t1.clientY + t2.clientY) / 2 - rect.top;
-          
           zoomState.current.touchStartDist = dist;
           zoomState.current.touchStartZoom = zoom;
-          // Midpoint on screen
           zoomState.current.viewX = midX;
           zoomState.current.viewY = midY;
-          // Corresponding point in the unscaled world (image units including padding offset)
           zoomState.current.anchorX = (viewportRef.current.scrollLeft + midX) / zoom;
           zoomState.current.anchorY = (viewportRef.current.scrollTop + midY) / zoom;
         }
@@ -302,26 +283,19 @@
           const t1 = e.touches[0];
           const t2 = e.touches[1];
           const dist = Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
-          
           const rect = viewportRef.current.getBoundingClientRect();
           const midX = (t1.clientX + t2.clientX) / 2 - rect.left;
           const midY = (t1.clientY + t2.clientY) / 2 - rect.top;
-          
           const ratio = dist / zoomState.current.touchStartDist;
           const newZoom = Math.min(20, Math.max(0.001, zoomState.current.touchStartZoom * ratio));
-          
           setZoom(newZoom);
-          // Apply scroll immediately for midpoint zoom effect
           applyZoomScroll(newZoom, zoomState.current.anchorX, zoomState.current.anchorY, midX, midY);
-          
-          // Update viewX/Y for subsequent logic
           zoomState.current.viewX = midX;
           zoomState.current.viewY = midY;
         }
       };
 
       const handleZoomAction = (factor) => {
-        // Center zoom on current crop or screen center
         updateZoomAnchor(false);
         setZoom(z => Math.min(20, Math.max(0.001, z * factor)));
       };
@@ -353,7 +327,6 @@
         const yP = (completedCrop.y / sourceImg.height) * 100;
         const wP = (completedCrop.width / sourceImg.width) * 100;
         const hP = (completedCrop.height / sourceImg.height) * 100;
-
         const updated = await Promise.all(images.map(async (img) => {
           const tempImg = new Image();
           tempImg.src = img.url;
@@ -388,7 +361,13 @@
       return (
         <div className="min-h-screen flex flex-col ltr-force">
           <header className="h-16 bg-white border-b px-6 flex items-center justify-between sticky top-0 z-40" style={{ direction: 'rtl' }}>
-            <div className="flex items-center gap-3"><Scissors className="text-indigo-600" size={24}/><h1 className="font-extrabold text-lg">Bulk Crop Pro</h1></div>
+            <div className="flex items-center gap-3">
+              <Scissors className="text-indigo-600" size={24}/>
+              <h1 className="font-extrabold text-lg flex items-center gap-2">
+                Bulk Crop Pro 
+                <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md border border-slate-200">{VERSION}</span>
+              </h1>
+            </div>
             {images.length > 0 && (
               <div className="flex items-center gap-2">
                 <button onClick={() => setImages([])} className="text-slate-400 hover:text-red-500 p-2 transition-colors"><Trash2 size={20}/></button>

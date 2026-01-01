@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | Standalone Demo</title>
+  <title>Bulk Crop Pro | v3.7.0</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -52,6 +52,8 @@
     import { createRoot } from 'react-dom/client';
     import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2, Maximize } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
+
+    const VERSION = "v3.7.0";
 
     const App = () => {
       const [images, setImages] = useState([]);
@@ -186,7 +188,13 @@
       return (
         <div className="min-h-screen flex flex-col ltr-force">
           <header className="h-16 bg-white border-b px-6 flex items-center justify-between sticky top-0 z-40" style={{ direction: 'rtl' }}>
-            <div className="flex items-center gap-3"><Scissors className="text-indigo-600" size={24}/><h1 className="font-extrabold text-lg">Bulk Crop Pro</h1></div>
+            <div className="flex items-center gap-3">
+              <Scissors className="text-indigo-600" size={24}/>
+              <h1 className="font-extrabold text-lg flex items-center gap-2">
+                Bulk Crop Pro
+                <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md border border-slate-200">{VERSION}</span>
+              </h1>
+            </div>
             {images.length > 0 && <button onClick={() => { images.forEach(img => { if (img.cropped) { const l = document.createElement('a'); l.href = img.cropped; l.download = `CROP_${img.name}.jpg`; l.click(); }}); }} className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-lg">הורד הכל</button>}
           </header>
           <main className="flex-1 p-5 md:p-10 max-w-6xl mx-auto w-full" style={{ direction: 'rtl' }}>
