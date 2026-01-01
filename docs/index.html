@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v3.7.3</title>
+  <title>Bulk Crop Pro | v3.7.4</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -65,7 +65,7 @@
     import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2, Maximize, RotateCcw } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 
-    const VERSION = "v3.7.3";
+    const VERSION = "v3.7.4";
 
     const App = () => {
       const [images, setImages] = useState([]);
@@ -141,13 +141,18 @@
         });
       }, []);
 
+      const currentOriginalAspect = imgRef.current ? imgRef.current.naturalWidth / imgRef.current.naturalHeight : undefined;
+
       const onAspectChange = (newAspect) => {
         setAspect(newAspect);
         if (imgRef.current) {
           const { width, height } = imgRef.current;
-          const newCrop = newAspect === undefined ? 
-            { unit: '%', x: 0, y: 0, width: 100, height: 100 } : 
-            centerCrop(makeAspectCrop({ unit: '%', width: 90 }, newAspect, width, height), width, height);
+          let newCrop;
+          if (newAspect === undefined || Math.abs(newAspect - currentOriginalAspect) < 0.001) {
+            newCrop = { unit: '%', x: 0, y: 0, width: 100, height: 100 };
+          } else {
+            newCrop = centerCrop(makeAspectCrop({ unit: '%', width: 100 }, newAspect, width, height), width, height);
+          }
           setCrop(newCrop);
           setTimeout(() => updateZoomAnchor(false), 50);
         }
@@ -173,7 +178,7 @@
         else document.body.classList.remove('editor-open');
       }, [editingIdx, images, fitToViewport]);
 
-      const onImageLoad = (e) => { imgRef.current = e.currentTarget; fitToViewport(); if (aspect === undefined) setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 }); else setCrop(centerCrop(makeAspectCrop({ unit: '%', width: 90 }, aspect, e.currentTarget.width, e.currentTarget.height), e.currentTarget.width, e.currentTarget.height)); };
+      const onImageLoad = (e) => { imgRef.current = e.currentTarget; fitToViewport(); setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 }); };
 
       const handleTouchStart = (e) => {
         if (e.touches.length === 2) {
@@ -207,8 +212,6 @@
         if (!completedCrop || !imgRef.current || editingIdx === null) return;
         setIsProcessing(true); const image = imgRef.current; const canvas = document.createElement('canvas'); const scaleX = image.naturalWidth / image.width; const scaleY = image.naturalHeight / image.height; canvas.width = Math.ceil(completedCrop.width * scaleX); canvas.height = Math.ceil(completedCrop.height * scaleY); const ctx = canvas.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(image, completedCrop.x * scaleX, completedCrop.y * scaleY, completedCrop.width * scaleX, completedCrop.height * scaleY, 0, 0, canvas.width, canvas.height); const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95)); setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropped: URL.createObjectURL(blob), cropConfig: { crop: { ...crop }, aspect } } : img)); setIsProcessing(false); setEditingIdx(null);
       };
-
-      const currentOriginalAspect = imgRef.current ? imgRef.current.naturalWidth / imgRef.current.naturalHeight : undefined;
 
       return (
         <div className="min-h-screen flex flex-col ltr-force overflow-hidden">
