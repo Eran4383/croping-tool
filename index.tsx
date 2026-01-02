@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2, Maximize, RotateCw, RotateCcw, FileType, Settings, RefreshCw } from 'lucide-react';
+import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2, Maximize, RotateCw, RotateCcw, FileType, Settings, RefreshCw, Undo as UndoIcon, Redo as RedoIcon } from 'lucide-react';
 import ReactCrop, { centerCrop, makeAspectCrop, type Crop, type PixelCrop } from 'react-image-crop';
 import { jsPDF } from 'jspdf';
 
-const VERSION = "v4.4.0";
+const VERSION = "v4.5.1";
 const PADDING = 2000;
 
 interface ImageItem {
@@ -18,6 +18,12 @@ interface ImageItem {
     aspect: number | undefined;
     rotation: number;
   } | null;
+}
+
+interface EditorState {
+  crop: Crop | undefined;
+  aspect: number | undefined;
+  rotation: number;
 }
 
 const App = () => {
@@ -33,6 +39,11 @@ const App = () => {
   const [isPinching, setIsPinching] = useState(false);
   const [globalFormat, setGlobalFormat] = useState('image/jpeg');
   
+  // Undo/Redo states
+  const [history, setHistory] = useState<EditorState[]>([]);
+  const [historyPointer, setHistoryPointer] = useState(-1);
+  const isInternalHistoryUpdate = useRef(false);
+
   const imgRef = useRef<HTMLImageElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -113,6 +124,51 @@ const App = () => {
 
   const currentOriginalAspect = imgRef.current ? imgRef.current.naturalWidth / imgRef.current.naturalHeight : undefined;
 
+  const pushToHistory = useCallback((state: EditorState) => {
+    if (isInternalHistoryUpdate.current) return;
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyPointer + 1);
+      const last = newHistory[newHistory.length - 1];
+      if (last && 
+          JSON.stringify(last.crop) === JSON.stringify(state.crop) && 
+          last.aspect === state.aspect && 
+          last.rotation === state.rotation) {
+        return prev;
+      }
+      newHistory.push(state);
+      if (newHistory.length > 50) newHistory.shift();
+      return newHistory;
+    });
+    setHistoryPointer(prev => {
+      const newPointer = prev + 1;
+      return newPointer >= 50 ? 49 : newPointer;
+    });
+  }, [historyPointer]);
+
+  const undo = () => {
+    if (historyPointer > 0) {
+      isInternalHistoryUpdate.current = true;
+      const prevState = history[historyPointer - 1];
+      setCrop(prevState.crop);
+      setAspect(prevState.aspect);
+      setRotation(prevState.rotation);
+      setHistoryPointer(historyPointer - 1);
+      setTimeout(() => { isInternalHistoryUpdate.current = false; }, 0);
+    }
+  };
+
+  const redo = () => {
+    if (historyPointer < history.length - 1) {
+      isInternalHistoryUpdate.current = true;
+      const nextState = history[historyPointer + 1];
+      setCrop(nextState.crop);
+      setAspect(nextState.aspect);
+      setRotation(nextState.rotation);
+      setHistoryPointer(historyPointer + 1);
+      setTimeout(() => { isInternalHistoryUpdate.current = false; }, 0);
+    }
+  };
+
   const onAspectChange = (newAspect: number | undefined) => {
     setAspect(newAspect);
     if (imgRef.current) {
@@ -125,15 +181,20 @@ const App = () => {
       }
       setCrop(newCrop);
       setTimeout(() => updateZoomAnchor(), 50);
+      pushToHistory({ crop: newCrop, aspect: newAspect, rotation });
     }
   };
 
   const handleRotateCw = () => {
-    setRotation(prev => (Math.round(prev / 90) * 90 + 90) % 360);
+    const nextRot = (Math.round(rotation / 90) * 90 + 90) % 360;
+    setRotation(nextRot);
+    pushToHistory({ crop, aspect, rotation: nextRot });
   };
 
   const handleRotateCcw = () => {
-    setRotation(prev => (Math.round(prev / 90) * 90 - 90 + 360) % 360);
+    const nextRot = (Math.round(rotation / 90) * 90 - 90 + 360) % 360;
+    setRotation(nextRot);
+    pushToHistory({ crop, aspect, rotation: nextRot });
   };
 
   const navigateTo = useCallback((newIdx: number | null) => {
@@ -169,30 +230,37 @@ const App = () => {
       document.body.classList.add('editor-open');
       setIsPanMode(false);
       const currentImg = images[editingIdx];
+      let initialCrop: Crop = { unit: '%' as const, x: 0, y: 0, width: 100, height: 100 };
+      let initialAspect: number | undefined = undefined;
+      let initialRotation = 0;
+
       if (currentImg && currentImg.cropConfig) {
-        setCrop(currentImg.cropConfig.crop);
-        setAspect(currentImg.cropConfig.aspect);
-        setRotation(currentImg.cropConfig.rotation || 0);
-      } else {
-        setAspect(undefined);
-        setRotation(0);
-        setCrop({ unit: '%' as const, x: 0, y: 0, width: 100, height: 100 });
+        initialCrop = currentImg.cropConfig.crop;
+        initialAspect = currentImg.cropConfig.aspect;
+        initialRotation = currentImg.cropConfig.rotation || 0;
       }
+      
+      setCrop(initialCrop);
+      setAspect(initialAspect);
+      setRotation(initialRotation);
+      
+      setHistory([{ crop: initialCrop, aspect: initialAspect, rotation: initialRotation }]);
+      setHistoryPointer(0);
+
       setTimeout(fitToViewport, 50);
     } else {
       document.body.classList.remove('editor-open');
     }
-  }, [editingIdx, images, fitToViewport]);
+  }, [editingIdx, fitToViewport]);
 
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     imgRef.current = e.currentTarget;
     fitToViewport();
-    const currentImg = editingIdx !== null ? images[editingIdx] : null;
-    if (currentImg && currentImg.cropConfig) {
-      setCrop(currentImg.cropConfig.crop);
-      return;
-    }
-    setCrop({ unit: '%' as const, x: 0, y: 0, width: 100, height: 100 });
+  };
+
+  const onCropComplete = (pixelCrop: PixelCrop) => {
+    setCompletedCrop(pixelCrop);
+    pushToHistory({ crop, aspect, rotation });
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -494,16 +562,56 @@ const App = () => {
 
       {editingIdx !== null && (
         <div className={`editor-overlay ltr-force ${isPinching ? 'is-pinching' : ''}`}>
-          <div className="flex items-center justify-between px-6 h-14 bg-black/60 shrink-0 backdrop-blur-md">
-            <div className="flex items-center gap-4">
-              <span className="text-white/80 font-black text-sm tracking-widest">{editingIdx + 1} / {images.length}</span>
+          <div className="flex items-center justify-between px-4 sm:px-6 h-16 bg-black/70 shrink-0 backdrop-blur-xl border-b border-white/10">
+            <div className="flex items-center gap-3 md:gap-6 flex-1 min-w-0">
+              {/* Image Counter Badge */}
+              <div className="flex items-center bg-white/15 px-3 py-1.5 rounded-xl border border-white/10 shrink-0">
+                <span className="text-white font-bold text-xs md:text-sm tracking-tight whitespace-nowrap">
+                  {editingIdx + 1} <span className="mx-1 opacity-40">/</span> {images.length}
+                </span>
+              </div>
+
+              {/* Mode Toggles */}
               <div className="flex items-center bg-white/10 p-1 rounded-2xl border border-white/5">
-                <button title="חיתוך" onClick={() => setIsPanMode(false)} className={`p-2.5 rounded-xl transition-all ${!isPanMode ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}><MousePointer2 size={18}/></button>
-                <button title="הזזה" onClick={() => setIsPanMode(true)} className={`p-2.5 rounded-xl transition-all ${isPanMode ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}><Move size={18}/></button>
+                <button 
+                  title="חיתוך" 
+                  onClick={() => setIsPanMode(false)} 
+                  className={`p-2 rounded-xl transition-all ${!isPanMode ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                >
+                  <MousePointer2 size={18}/>
+                </button>
+                <button 
+                  title="הזזה" 
+                  onClick={() => setIsPanMode(true)} 
+                  className={`p-2 rounded-xl transition-all ${isPanMode ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                >
+                  <Move size={18}/>
+                </button>
+              </div>
+              
+              {/* Undo/Redo Buttons Group */}
+              <div className="flex items-center gap-0.5 bg-white/10 p-1 rounded-2xl border border-white/5">
+                <button 
+                  title="בטל (Undo)" 
+                  disabled={historyPointer <= 0}
+                  onClick={undo} 
+                  className={`p-2 rounded-xl transition-all ${historyPointer > 0 ? 'text-white hover:bg-white/10' : 'text-white/15 cursor-not-allowed'}`}
+                >
+                  <UndoIcon size={18}/>
+                </button>
+                <button 
+                  title="בצע שוב (Redo)" 
+                  disabled={historyPointer >= history.length - 1}
+                  onClick={redo} 
+                  className={`p-2 rounded-xl transition-all ${historyPointer < history.length - 1 ? 'text-white hover:bg-white/10' : 'text-white/15 cursor-not-allowed'}`}
+                >
+                  <RedoIcon size={18}/>
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center bg-white/10 rounded-xl px-3 h-10 border border-white/5" title="סוג הקובץ לשמירה">
+
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+              <div className="hidden md:flex items-center bg-white/10 rounded-xl px-3 h-10 border border-white/5" title="סוג הקובץ לשמירה">
                 <FileType size={16} className="text-white/40 ml-2" />
                 <select 
                   value={globalFormat} 
@@ -515,7 +623,13 @@ const App = () => {
                   <option className="bg-slate-800" value="application/pdf">PDF</option>
                 </select>
               </div>
-              <button title="סגור" onClick={() => navigateTo(null)} className="text-white/50 p-2 hover:text-white hover:scale-110 transition-all"><X size={32}/></button>
+              <button 
+                title="סגור" 
+                onClick={() => navigateTo(null)} 
+                className="text-white/40 p-2 hover:text-white hover:bg-white/10 rounded-full transition-all"
+              >
+                <X size={24}/>
+              </button>
             </div>
           </div>
 
@@ -529,7 +643,7 @@ const App = () => {
                  setZoom(z => Math.min(20, Math.max(0.001, z * delta)));
                }}>
             <div className="image-container" ref={containerRef}>
-              <ReactCrop crop={crop} onChange={setCrop} onComplete={setCompletedCrop} aspect={aspect} disabled={isPanMode || isPinching}>
+              <ReactCrop crop={crop} onChange={setCrop} onComplete={onCropComplete} aspect={aspect} disabled={isPanMode || isPinching}>
                 <img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false} className="crop-target-img shadow-2xl"
                   style={{ 
                     width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto',
@@ -562,12 +676,19 @@ const App = () => {
                   <input 
                     type="range" min="-180" max="180" step="1" 
                     value={rotation > 180 ? rotation - 360 : rotation} 
-                    onChange={(e) => setRotation(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const newRot = parseInt(e.target.value);
+                      setRotation(newRot);
+                      pushToHistory({ crop, aspect, rotation: newRot });
+                    }}
                     className="flex-1 h-1.5"
                   />
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-mono text-indigo-400 w-8 text-center">{Math.round(rotation)}°</span>
-                    <button title="איפוס סיבוב" onClick={() => setRotation(0)} className="text-white/40 hover:text-white transition-colors"><RefreshCw size={14}/></button>
+                    <button title="איפוס סיבוב" onClick={() => {
+                      setRotation(0);
+                      pushToHistory({ crop, aspect, rotation: 0 });
+                    }} className="text-white/40 hover:text-white transition-colors"><RefreshCw size={14}/></button>
                   </div>
                 </div>
               </div>
