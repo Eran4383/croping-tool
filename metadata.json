@@ -1,7 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v5.1.6 - Guaranteed 100% image visibility in editor for all aspect ratios (Portrait/Landscape). Fixed viewport containment to prevent menu occlusion and ensured 'Free' mode defaults to 100% image size.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "description": "v4.2.1 - סנכרון מלא של תיקיית docs ועדכון גרסה למניעת התנגשויות במטמון.",
+  "requestFramePermissions": []
 }
