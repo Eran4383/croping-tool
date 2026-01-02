@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "19",
-    "react-dom": "19",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "lucide-react": "0.460.0",
     "react-image-crop": "11.0.7",
     "jspdf": "2.5.1"

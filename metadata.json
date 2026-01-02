@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v4.2.1 - סנכרון מלא של תיקיית docs ועדכון גרסה למניעת התנגשויות במטמון.",
+  "description": "v4.4.0 - Added manual fine-grained rotation control (slider) and reset functionality to the image editor.",
   "requestFramePermissions": []
 }

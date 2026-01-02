@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v4.2.1</title>
+  <title>Bulk Crop Pro | v4.4.0</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -60,8 +60,8 @@
       display: block;
       user-select: none;
       -webkit-user-drag: none;
-      transition: none !important;
-      will-change: width, height;
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+      will-change: width, height, transform;
       max-width: none !important;
     }
     
@@ -73,7 +73,7 @@
     .is-pinching .ReactCrop__interaction-layer { pointer-events: none !important; }
 
     .editor-footer { background: #111827; padding: 12px; border-top: 1px solid #374151; z-index: 10000; overflow: hidden !important; flex-shrink: 0; }
-    @media (min-width: 768px) { .editor-footer { padding: 16px 40px; } }
+    @media (min-width: 768px) { .editor-footer { padding: 12px 40px; } }
     
     .aspect-chip { padding: 8px 16px; background: #1f2937; color: #9ca3af; border-radius: 10px; font-size: 13px; font-weight: 700; border: 1px solid #374151; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
     .aspect-chip.active { background: var(--primary); color: white; border-color: var(--primary); }
@@ -114,6 +114,11 @@
       transition: transform 0.2s;
     }
     .format-selector-floating:hover { transform: scale(1.02); }
+
+    input[type=range] {
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
   </style>
   <script type="importmap">
 {
@@ -133,11 +138,11 @@
   <script type="text/babel" data-type="module" data-presets="react,typescript">
     import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
     import { createRoot } from 'react-dom/client';
-    import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2, Maximize, RotateCcw, FileType, Settings } from 'lucide-react';
+    import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2, Trash2, Move, MousePointer2, Maximize, RotateCw, RotateCcw, FileType, Settings, RefreshCw } from 'lucide-react';
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
     import { jsPDF } from 'jspdf';
 
-    const VERSION = "v4.2.1";
+    const VERSION = "v4.4.0";
     const PADDING = 2000;
 
     const App = () => {
@@ -146,6 +151,7 @@
       const [crop, setCrop] = useState(); 
       const [completedCrop, setCompletedCrop] = useState(null);
       const [aspect, setAspect] = useState(undefined);
+      const [rotation, setRotation] = useState(0);
       const [isProcessing, setIsProcessing] = useState(false);
       const [zoom, setZoom] = useState(1);
       const [isPanMode, setIsPanMode] = useState(false);
@@ -199,7 +205,7 @@
           const items = e.clipboardData?.items;
           if (!items) return;
           const files = [];
-          for (const item of items) {
+          for (const item of Array.from(items)) {
             if (item.type.indexOf('image') !== -1) {
               const file = item.getAsFile();
               if (file) files.push(file);
@@ -247,15 +253,18 @@
         }
       };
 
+      const handleRotateCw = () => setRotation(prev => (Math.round(prev / 90) * 90 + 90) % 360);
+      const handleRotateCcw = () => setRotation(prev => (Math.round(prev / 90) * 90 - 90 + 360) % 360);
+
       const navigateTo = useCallback((newIdx) => {
         if (editingIdx !== null && crop) {
           setImages(prev => prev.map((img, i) => i === editingIdx ? {
             ...img,
-            cropConfig: { crop: { ...crop }, aspect }
+            cropConfig: { crop: { ...crop }, aspect, rotation }
           } : img));
         }
         setEditingIdx(newIdx);
-      }, [editingIdx, crop, aspect]);
+      }, [editingIdx, crop, aspect, rotation]);
 
       useEffect(() => {
         if (editingIdx === null) return;
@@ -283,8 +292,10 @@
           if (currentImg && currentImg.cropConfig) {
             setCrop(currentImg.cropConfig.crop);
             setAspect(currentImg.cropConfig.aspect);
+            setRotation(currentImg.cropConfig.rotation || 0);
           } else {
             setAspect(undefined);
+            setRotation(0);
             setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
           }
           setTimeout(fitToViewport, 50);
@@ -296,7 +307,7 @@
       const onImageLoad = (e) => {
         imgRef.current = e.currentTarget;
         fitToViewport();
-        const currentImg = images[editingIdx];
+        const currentImg = editingIdx !== null ? images[editingIdx] : null;
         if (currentImg && currentImg.cropConfig) {
           setCrop(currentImg.cropConfig.crop);
           return;
@@ -373,29 +384,52 @@
         setZoom(z => Math.min(20, Math.max(0.001, z * factor)));
       };
 
+      const getProcessedCanvas = async (image, cropConfig, currentRotation) => {
+        const canvas = document.createElement('canvas');
+        const scaleX = image.naturalWidth / image.width;
+        const scaleY = image.naturalHeight / image.height;
+        
+        const cropX = cropConfig.x * scaleX;
+        const cropY = cropConfig.y * scaleY;
+        const cropW = cropConfig.width * scaleX;
+        const cropH = cropConfig.height * scaleY;
+
+        canvas.width = Math.ceil(cropW);
+        canvas.height = Math.ceil(cropH);
+        
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((currentRotation * Math.PI) / 180);
+        
+        const imgCenterX = cropX + cropW / 2;
+        const imgCenterY = cropY + cropH / 2;
+        
+        ctx.drawImage(
+          image,
+          0, 0, image.naturalWidth, image.naturalHeight,
+          -imgCenterX, -imgCenterY, image.naturalWidth, image.naturalHeight
+        );
+        ctx.restore();
+        return canvas;
+      };
+
       const handleSave = async () => {
         if (!completedCrop || !imgRef.current || editingIdx === null) return;
         setIsProcessing(true);
         const image = imgRef.current;
-        const canvas = document.createElement('canvas');
-        const scaleX = image.naturalWidth / image.width;
-        const scaleY = image.naturalHeight / image.height;
-        const width = Math.ceil(completedCrop.width * scaleX);
-        const height = Math.ceil(completedCrop.height * scaleY);
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(image, completedCrop.x * scaleX, completedCrop.y * scaleY, completedCrop.width * scaleX, completedCrop.height * scaleY, 0, 0, width, height);
         
+        const canvas = await getProcessedCanvas(image, completedCrop, rotation);
         const previewBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
         const previewUrl = URL.createObjectURL(previewBlob);
 
         setImages(prev => prev.map((img, i) => i === editingIdx ? { 
           ...img, 
           cropped: previewUrl, 
-          cropConfig: { crop: { ...crop }, aspect }
+          cropConfig: { crop: { ...crop }, aspect, rotation }
         } : img));
         
         setIsProcessing(false);
@@ -415,23 +449,39 @@
           const tempImg = new Image();
           tempImg.src = img.url;
           await new Promise(r => tempImg.onload = r);
-          const pxCrop = { x: (xP * tempImg.naturalWidth) / 100, y: (yP * tempImg.naturalHeight) / 100, width: (wP * tempImg.naturalWidth) / 100, height: (hP * tempImg.naturalHeight) / 100 };
+          
+          const pxCrop = { 
+            x: (xP * tempImg.naturalWidth) / 100, 
+            y: (yP * tempImg.naturalHeight) / 100, 
+            width: (wP * tempImg.naturalWidth) / 100, 
+            height: (hP * tempImg.naturalHeight) / 100 
+          };
+          
           const canvas = document.createElement('canvas');
-          canvas.width = Math.ceil(pxCrop.width); canvas.height = Math.ceil(pxCrop.height);
+          canvas.width = Math.ceil(pxCrop.width);
+          canvas.height = Math.ceil(pxCrop.height);
           const ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(tempImg, pxCrop.x, pxCrop.y, pxCrop.width, pxCrop.height, 0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          ctx.save();
+          ctx.translate(canvas.width / 2, canvas.height / 2);
+          ctx.rotate((rotation * Math.PI) / 180);
+          const imgCX = pxCrop.x + pxCrop.width / 2;
+          const imgCY = pxCrop.y + pxCrop.height / 2;
+          ctx.drawImage(tempImg, -imgCX, -imgCY);
+          ctx.restore();
           
           const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
           return { 
             ...img, 
-            cropped: URL.createObjectURL(blob), 
-            cropConfig: { crop: { unit: '%', x: xP, y: yP, width: wP, height: hP }, aspect }
+            cropped: blob ? URL.createObjectURL(blob) : null, 
+            cropConfig: { crop: { unit: '%', x: xP, y: yP, width: wP, height: hP }, aspect, rotation }
           };
         }));
         setImages(updated);
         setIsProcessing(false);
-        alert(`החיתוך הוחל על כל הגלריה. פורמט ההורדה הנוכחי: ${globalFormat.split('/')[1].toUpperCase()}.`);
+        alert(`החיתוך והסיבוב הוחלו על כל הגלריה. פורמט ההורדה הנוכחי: ${globalFormat.split('/')[1].toUpperCase()}.`);
       };
 
       const downloadFile = async (img) => {
@@ -469,7 +519,7 @@
             canvas.width = tempImg.width; canvas.height = tempImg.height;
             canvas.getContext('2d').drawImage(tempImg, 0, 0);
             const pngBlob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-            finalUrl = URL.createObjectURL(pngBlob);
+            if (pngBlob) finalUrl = URL.createObjectURL(pngBlob);
           }
           
           const link = document.createElement('a');
@@ -510,13 +560,7 @@
               {images.length === 0 ? (
                 <div title="לחץ להעלאת תמונות" onClick={() => fileInputRef.current.click()} className="min-h-[60vh] bg-white border-4 border-dashed border-slate-200 rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer hover:border-indigo-300 transition-all group">
                   <div className="bg-indigo-50 p-6 rounded-full group-hover:scale-110 transition-transform mb-6"><Plus size={54} className="text-indigo-600"/></div>
-                  <h2 className="text-2xl font-black text-slate-800">העלאת תמונות לחיתוך</h2>
-                  <p className="text-slate-400 mt-3 text-center px-8 text-lg">לחצו כאן, גררו קבצים או פשוט <b>הדביקו (CTRL+V)</b></p>
-                  <div className="mt-8 flex gap-4 text-slate-400 text-sm font-semibold">
-                     <span className="flex items-center gap-1"><Check size={14}/> JPEG</span>
-                     <span className="flex items-center gap-1"><Check size={14}/> PNG</span>
-                     <span className="flex items-center gap-1"><Check size={14}/> PDF</span>
-                  </div>
+                  <h2 className="text-2xl font-black text-slate-800 text-center">העלאת תמונות לחיתוך</h2>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 pb-32">
@@ -607,7 +651,8 @@
                     <img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false} className="crop-target-img shadow-2xl"
                       style={{ 
                         width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto',
-                        height: imgRef.current ? `${imgRef.current.naturalHeight * zoom}px` : 'auto'
+                        height: imgRef.current ? `${imgRef.current.naturalHeight * zoom}px` : 'auto',
+                        transform: `rotate(${rotation}deg)`
                       }}
                     />
                   </ReactCrop>
@@ -616,21 +661,41 @@
 
               <div className="editor-footer" style={{ direction: 'rtl' }}>
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-between max-w-6xl mx-auto">
-                  <div className="aspect-row-scroll">
-                     {[
-                       {l:'חופשי',v:undefined, t: 'חיתוך חופשי'},
-                       {l:<RotateCcw size={16} />,v:currentOriginalAspect, t: 'יחס מקורי'},
-                       {l:'1:1',v:1, t: '1:1 ריבוע'},
-                       {l:'16:9',v:16/9, t: '16:9 רחב'},
-                       {l:'9:16',v:9/16, t: '9:16 סטורי'},
-                       {l:'4:5',v:0.8, t: '4:5 אינסטגרם'}
-                     ].map((a, i)=>(
-                       <button key={i} title={a.t} onClick={()=>onAspectChange(a.v)} className={`aspect-chip flex items-center justify-center min-w-[44px] ${aspect===a.v?'active':''}`}>{a.l}</button>
-                     ))}
+                  <div className="flex flex-col gap-2 w-full md:w-auto">
+                    <div className="aspect-row-scroll">
+                       {[
+                         {l:'חופשי',v:undefined, t: 'חיתוך חופשי'},
+                         {l:'מקורי',v:currentOriginalAspect, t: 'יחס מקורי'},
+                         {l:'1:1',v:1, t: '1:1 ריבוע'},
+                         {l:'16:9',v:16/9, t: '16:9 רחב'},
+                         {l:'9:16',v:9/16, t: '9:16 סטורי'},
+                         {l:'4:5',v:0.8, t: '4:5 אינסטגרם'}
+                       ].map((a, i)=>(
+                         <button key={i} title={a.t} onClick={()=>onAspectChange(a.v)} className={`aspect-chip flex items-center justify-center min-w-[44px] ${aspect===a.v?'active':''}`}>{a.l}</button>
+                       ))}
+                    </div>
+                    {/* Manual Rotation Slider */}
+                    <div className="flex items-center gap-4 bg-white/5 p-2 rounded-xl border border-white/5" style={{ direction: 'rtl' }}>
+                      <span className="text-[11px] font-bold text-white/60 whitespace-nowrap min-w-[60px]">סיבוב חופשי:</span>
+                      <input 
+                        type="range" min="-180" max="180" step="1" 
+                        value={rotation > 180 ? rotation - 360 : rotation} 
+                        onChange={(e) => setRotation(parseInt(e.target.value))}
+                        className="flex-1 h-1.5"
+                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono text-indigo-400 w-8 text-center">{Math.round(rotation)}°</span>
+                        <button title="איפוס סיבוב" onClick={() => setRotation(0)} className="text-white/40 hover:text-white transition-colors"><RefreshCw size={14}/></button>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-end flex-wrap">
                     <div className="flex items-center gap-1 bg-white/10 p-1 rounded-2xl border border-white/5">
+                      <div className="flex items-center gap-0.5 border-l border-white/5 pl-1">
+                        <button title="סיבוב שמאלה 90°" onClick={handleRotateCcw} className="p-2 text-white/50 hover:text-white transition-colors"><RotateCcw size={18}/></button>
+                        <button title="סיבוב ימינה 90°" onClick={handleRotateCw} className="p-2 text-white/50 hover:text-white transition-colors"><RotateCw size={18}/></button>
+                      </div>
                       <button title="הקטנה" onClick={()=>handleZoomAction(0.8)} className="p-2 text-white/50 hover:text-white transition-colors"><ZoomOut size={18}/></button>
                       <button title="התאמה" onClick={fitToViewport} className="p-2 text-white/50 hover:text-white transition-colors"><Maximize size={18}/></button>
                       <button title="הגדלה" onClick={()=>handleZoomAction(1.2)} className="p-2 text-white/50 hover:text-white transition-colors"><ZoomIn size={18}/></button>
@@ -644,7 +709,6 @@
                       <button title="הבא" onClick={()=>navigateTo(Math.min(images.length-1,editingIdx+1))} disabled={editingIdx===images.length-1} className="p-1 text-white/20 hover:text-white disabled:opacity-0 transition-all"><ChevronLeft size={32}/></button>
                     </div>
                   </div>
-                  <button title="החל על הכל" onClick={handleApplyAll} className="w-full md:hidden bg-white/5 text-indigo-400 font-bold text-xs py-2.5 rounded-xl border border-white/10 mt-2">החל חיתוך על כל התמונות</button>
                   <button title="החל על הכל" onClick={handleApplyAll} className="hidden md:block bg-white/5 hover:bg-white/15 text-indigo-300 font-bold text-xs px-4 py-2.5 rounded-xl border border-white/10 transition-all">החל על הכל</button>
                 </div>
               </div>
@@ -653,7 +717,11 @@
         </div>
       );
     };
-    createRoot(document.getElementById('root')).render(<App />);
+
+    const root = document.getElementById('root');
+    if (root) {
+      createRoot(root).render(<App />);
+    }
   </script>
 </body>
 </html>
