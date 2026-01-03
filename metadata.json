@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v4.5.3 - Fixed editor loading bug on production servers and stabilized bottom footer layout for consistent display.",
+  "description": "v4.5.4 - Fixed footer visibility bug and stabilized image loading for production environments.",
   "requestFramePermissions": []
 }
