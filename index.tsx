@@ -5,7 +5,7 @@ import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, 
 import ReactCrop, { centerCrop, makeAspectCrop, type Crop, type PixelCrop } from 'react-image-crop';
 import { jsPDF } from 'jspdf';
 
-const VERSION = "v4.5.2";
+const VERSION = "v4.5.5";
 const PADDING = 2000;
 
 interface ImageItem {
@@ -107,6 +107,8 @@ const App = () => {
     if (!viewportRef.current || !imgRef.current) return;
     const viewport = viewportRef.current;
     const img = imgRef.current;
+    if (!img.naturalWidth || !img.naturalHeight) return;
+
     const vw = viewport.clientWidth - 40;
     const vh = viewport.clientHeight - 40;
     const ratio = Math.min(vw / img.naturalWidth, vh / img.naturalHeight);
@@ -122,7 +124,9 @@ const App = () => {
     });
   }, []);
 
-  const currentOriginalAspect = imgRef.current ? imgRef.current.naturalWidth / imgRef.current.naturalHeight : undefined;
+  const currentOriginalAspect = (imgRef.current && imgRef.current.naturalWidth > 0) 
+    ? imgRef.current.naturalWidth / imgRef.current.naturalHeight 
+    : undefined;
 
   const pushToHistory = useCallback((state: EditorState) => {
     if (isInternalHistoryUpdate.current) return;
@@ -247,8 +251,7 @@ const App = () => {
       setHistory([{ crop: initialCrop, aspect: initialAspect, rotation: initialRotation }]);
       setHistoryPointer(0);
 
-      // Stable delay for DOM to ready in production environment
-      setTimeout(fitToViewport, 80);
+      setTimeout(fitToViewport, 100);
     } else if (editingIdx === null) {
       document.body.classList.remove('editor-open');
     }
@@ -647,8 +650,8 @@ const App = () => {
               <ReactCrop crop={crop} onChange={setCrop} onComplete={onCropComplete} aspect={aspect} disabled={isPanMode || isPinching}>
                 <img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false} className="crop-target-img shadow-2xl"
                   style={{ 
-                    width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto',
-                    height: imgRef.current ? `${imgRef.current.naturalHeight * zoom}px` : 'auto',
+                    width: imgRef.current && imgRef.current.naturalWidth ? `${imgRef.current.naturalWidth * zoom}px` : 'auto',
+                    height: imgRef.current && imgRef.current.naturalHeight ? `${imgRef.current.naturalHeight * zoom}px` : 'auto',
                     transform: `rotate(${rotation}deg)`
                   }}
                 />

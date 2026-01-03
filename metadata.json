@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v4.5.2 - Fixed a critical bug where the editor overlay would crash or fail to load in production environments due to stale state references and missing render guards.",
+  "description": "v4.5.5 - Fix production rendering bug by adding image dimension guards and stabilizing footer flex behavior.",
   "requestFramePermissions": []
 }

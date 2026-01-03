@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v4.5.2</title>
+  <title>Bulk Crop Pro | v4.5.5</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,7 +32,7 @@
     body.editor-open { overflow: hidden !important; }
     .ltr-force { direction: ltr !important; }
     
-    .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; overflow: hidden; }
+    .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; overflow: hidden; height: 100vh; }
     
     .image-viewport { 
       flex: 1; 
@@ -72,7 +72,7 @@
     .is-pinching .ReactCrop__drag-elements,
     .is-pinching .ReactCrop__interaction-layer { pointer-events: none !important; }
 
-    .editor-footer { background: #111827; padding: 12px; border-top: 1px solid #374151; z-index: 10000; overflow: hidden !important; flex-shrink: 0; }
+    .editor-footer { background: #111827; padding: 12px; border-top: 1px solid #374151; z-index: 10000; overflow: hidden !important; flex-shrink: 0; width: 100%; }
     @media (min-width: 768px) { .editor-footer { padding: 12px 40px; } }
     
     .aspect-chip { padding: 8px 16px; background: #1f2937; color: #9ca3af; border-radius: 10px; font-size: 13px; font-weight: 700; border: 1px solid #374151; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
@@ -96,24 +96,6 @@
       width: 100%;
     }
     .aspect-row-scroll::-webkit-scrollbar { display: none; }
-
-    select {
-      appearance: none;
-      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-      background-repeat: no-repeat;
-      background-position: left 0.75rem center;
-      background-size: 1em;
-    }
-
-    .format-selector-floating {
-      position: fixed;
-      bottom: 2rem;
-      left: 2rem;
-      z-index: 50;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-      transition: transform 0.2s;
-    }
-    .format-selector-floating:hover { transform: scale(1.02); }
 
     input[type=range] {
       accent-color: var(--primary);
@@ -142,7 +124,7 @@
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
     import { jsPDF } from 'jspdf';
 
-    const VERSION = "v4.5.2";
+    const VERSION = "v4.5.5";
     const PADDING = 2000;
 
     const App = () => {
@@ -237,7 +219,27 @@
         }
       };
 
-      const currentOriginalAspect = imgRef.current ? imgRef.current.naturalWidth / imgRef.current.naturalHeight : undefined;
+      const fitToViewport = useCallback(() => {
+        if (!viewportRef.current || !imgRef.current) return;
+        const viewport = viewportRef.current;
+        const img = imgRef.current;
+        if (!img.naturalWidth || !img.naturalHeight) return;
+        const vw = viewport.clientWidth - 40;
+        const vh = viewport.clientHeight - 40;
+        const ratio = Math.min(vw / img.naturalWidth, vh / img.naturalHeight);
+        setZoom(ratio);
+        zoomState.current.lastZoom = ratio;
+        const zoomedW = img.naturalWidth * ratio;
+        const zoomedH = img.naturalHeight * ratio;
+        requestAnimationFrame(() => {
+          if (viewportRef.current) {
+            viewportRef.current.scrollLeft = (zoomedW / 2 + PADDING) - (viewportRef.current.clientWidth / 2);
+            viewportRef.current.scrollTop = (zoomedH / 2 + PADDING) - (viewportRef.current.clientHeight / 2);
+          }
+        });
+      }, []);
+
+      const currentOriginalAspect = (imgRef.current && imgRef.current.naturalWidth > 0) ? (imgRef.current.naturalWidth / imgRef.current.naturalHeight) : undefined;
 
       const onAspectChange = (newAspect) => {
         setAspect(newAspect);
@@ -253,25 +255,6 @@
           pushToHistory({ crop: newCrop, aspect: newAspect, rotation });
         }
       };
-
-      const fitToViewport = useCallback(() => {
-        if (!viewportRef.current || !imgRef.current) return;
-        const viewport = viewportRef.current;
-        const img = imgRef.current;
-        const vw = viewport.clientWidth - 40;
-        const vh = viewport.clientHeight - 40;
-        const ratio = Math.min(vw / img.naturalWidth, vh / img.naturalHeight);
-        setZoom(ratio);
-        zoomState.current.lastZoom = ratio;
-        const zoomedW = img.naturalWidth * ratio;
-        const zoomedH = img.naturalHeight * ratio;
-        requestAnimationFrame(() => {
-          if (viewportRef.current) {
-            viewportRef.current.scrollLeft = (zoomedW / 2 + PADDING) - (viewportRef.current.clientWidth / 2);
-            viewportRef.current.scrollTop = (zoomedH / 2 + PADDING) - (viewportRef.current.clientHeight / 2);
-          }
-        });
-      }, []);
 
       const navigateTo = useCallback((newIdx) => {
         if (editingIdx !== null && crop) {
@@ -291,7 +274,7 @@
           setCrop(ic); setAspect(ia); setRotation(ir);
           setHistory([{ crop: ic, aspect: ia, rotation: ir }]);
           setHistoryPointer(0);
-          setTimeout(fitToViewport, 80);
+          setTimeout(fitToViewport, 100);
         } else if (editingIdx === null) {
           document.body.classList.remove('editor-open');
         }
@@ -340,10 +323,6 @@
                   <div className="flex items-center bg-white/15 px-4 py-1.5 rounded-xl border border-white/10 shrink-0">
                     <span className="text-white font-bold text-sm">{editingIdx + 1} <span className="mx-2 opacity-30">/</span> {images.length}</span>
                   </div>
-                  <div className="flex items-center bg-white/10 p-1 rounded-2xl border border-white/5">
-                    <button onClick={() => setIsPanMode(false)} className={`p-2.5 rounded-xl ${!isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><MousePointer2 size={18}/></button>
-                    <button onClick={() => setIsPanMode(true)} className={`p-2.5 rounded-xl ${isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><Move size={18}/></button>
-                  </div>
                 </div>
                 <div className="flex items-center justify-end gap-3 flex-1">
                   <button onClick={() => navigateTo(null)} className="text-white/40 p-2 hover:text-white rounded-full transition-all"><X size={24}/></button>
@@ -352,7 +331,10 @@
               <div className={`image-viewport ${isPanMode ? 'pan-mode' : ''}`} ref={viewportRef}>
                 <div className="image-container" ref={containerRef}>
                   <ReactCrop crop={crop} onChange={setCrop} onComplete={onCropComplete} aspect={aspect} disabled={isPanMode}>
-                    <img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false} className="crop-target-img shadow-2xl" style={{ width: imgRef.current ? `${imgRef.current.naturalWidth * zoom}px` : 'auto', height: imgRef.current ? `${imgRef.current.naturalHeight * zoom}px` : 'auto', transform: `rotate(${rotation}deg)` }} />
+                    <img ref={imgRef} src={images[editingIdx].url} onLoad={onImageLoad} draggable={false} className="crop-target-img shadow-2xl" 
+                         style={{ width: imgRef.current && imgRef.current.naturalWidth ? `${imgRef.current.naturalWidth * zoom}px` : 'auto', 
+                                  height: imgRef.current && imgRef.current.naturalHeight ? `${imgRef.current.naturalHeight * zoom}px` : 'auto', 
+                                  transform: `rotate(${rotation}deg)` }} />
                   </ReactCrop>
                 </div>
               </div>
