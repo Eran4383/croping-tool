@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v4.5.4 - Fixed footer visibility bug and stabilized image loading for production environments.",
+  "description": "v4.5.1 - Improved top menu layout in the editor with better spacing, refined image counter UI, and responsive alignment to prevent text compression.",
   "requestFramePermissions": []
 }

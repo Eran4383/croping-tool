@@ -5,7 +5,7 @@ import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, 
 import ReactCrop, { centerCrop, makeAspectCrop, type Crop, type PixelCrop } from 'react-image-crop';
 import { jsPDF } from 'jspdf';
 
-const VERSION = "v4.5.4";
+const VERSION = "v4.5.1";
 const PADDING = 2000;
 
 interface ImageItem {
@@ -107,8 +107,6 @@ const App = () => {
     if (!viewportRef.current || !imgRef.current) return;
     const viewport = viewportRef.current;
     const img = imgRef.current;
-    if (!img.naturalWidth || !img.naturalHeight) return; // Prevent NaN calculations
-    
     const vw = viewport.clientWidth - 40;
     const vh = viewport.clientHeight - 40;
     const ratio = Math.min(vw / img.naturalWidth, vh / img.naturalHeight);
@@ -124,10 +122,7 @@ const App = () => {
     });
   }, []);
 
-  // Safe aspect ratio calculation
-  const currentOriginalAspect = (imgRef.current && imgRef.current.naturalWidth && imgRef.current.naturalHeight) 
-    ? (imgRef.current.naturalWidth / imgRef.current.naturalHeight) 
-    : undefined;
+  const currentOriginalAspect = imgRef.current ? imgRef.current.naturalWidth / imgRef.current.naturalHeight : undefined;
 
   const pushToHistory = useCallback((state: EditorState) => {
     if (isInternalHistoryUpdate.current) return;
@@ -177,11 +172,9 @@ const App = () => {
   const onAspectChange = (newAspect: number | undefined) => {
     setAspect(newAspect);
     if (imgRef.current) {
-      const { width, height, naturalWidth, naturalHeight } = imgRef.current;
+      const { width, height } = imgRef.current;
       let newCrop: Crop;
-      const originalRatio = (naturalWidth && naturalHeight) ? (naturalWidth / naturalHeight) : undefined;
-      
-      if (newAspect === undefined || (originalRatio && Math.abs(newAspect - originalRatio) < 0.001)) {
+      if (newAspect === undefined || (currentOriginalAspect && Math.abs(newAspect - currentOriginalAspect) < 0.001)) {
         newCrop = { unit: '%' as const, x: 0, y: 0, width: 100, height: 100 };
       } else {
         newCrop = centerCrop(makeAspectCrop({ unit: '%' as const, width: 100 }, newAspect, width, height), width, height);
@@ -233,7 +226,7 @@ const App = () => {
   }, [zoom, applyZoomScroll]);
 
   useEffect(() => {
-    if (editingIdx !== null && images[editingIdx]) {
+    if (editingIdx !== null) {
       document.body.classList.add('editor-open');
       setIsPanMode(false);
       const currentImg = images[editingIdx];
@@ -254,12 +247,11 @@ const App = () => {
       setHistory([{ crop: initialCrop, aspect: initialAspect, rotation: initialRotation }]);
       setHistoryPointer(0);
 
-      // Increased timeout for production site stability
-      setTimeout(fitToViewport, 150);
-    } else if (editingIdx === null) {
+      setTimeout(fitToViewport, 50);
+    } else {
       document.body.classList.remove('editor-open');
     }
-  }, [editingIdx, images, fitToViewport]);
+  }, [editingIdx, fitToViewport]);
 
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     imgRef.current = e.currentTarget;
@@ -568,9 +560,9 @@ const App = () => {
 
       <input type="file" ref={fileInputRef} multiple accept="image/*" className="hidden" onChange={e => handleAddImages(e.target.files)} />
 
-      {editingIdx !== null && images[editingIdx] && (
+      {editingIdx !== null && (
         <div className={`editor-overlay ltr-force ${isPinching ? 'is-pinching' : ''}`}>
-          <div className="flex items-center justify-between px-4 sm:px-6 h-16 bg-black/70 shrink-0 backdrop-blur-xl border-b border-white/10 z-[10001]">
+          <div className="flex items-center justify-between px-4 sm:px-6 h-16 bg-black/70 shrink-0 backdrop-blur-xl border-b border-white/10">
             <div className="flex items-center gap-3 md:gap-6 flex-1 min-w-0">
               {/* Image Counter Badge */}
               <div className="flex items-center bg-white/15 px-3 py-1.5 rounded-xl border border-white/10 shrink-0">
@@ -664,7 +656,7 @@ const App = () => {
           </div>
 
           <div className="editor-footer" style={{ direction: 'rtl' }}>
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-between max-w-6xl mx-auto w-full">
+            <div className="flex flex-col md:flex-row gap-4 items-center justify-between max-w-6xl mx-auto">
               <div className="flex flex-col gap-2 w-full md:w-auto">
                 <div className="aspect-row-scroll">
                    {[
