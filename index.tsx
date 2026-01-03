@@ -5,7 +5,7 @@ import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, 
 import ReactCrop, { centerCrop, makeAspectCrop, type Crop, type PixelCrop } from 'react-image-crop';
 import { jsPDF } from 'jspdf';
 
-const VERSION = "v4.5.5";
+const VERSION = "v4.5.6";
 const PADDING = 2000;
 
 interface ImageItem {
@@ -39,7 +39,6 @@ const App = () => {
   const [isPinching, setIsPinching] = useState(false);
   const [globalFormat, setGlobalFormat] = useState('image/jpeg');
   
-  // Undo/Redo states
   const [history, setHistory] = useState<EditorState[]>([]);
   const [historyPointer, setHistoryPointer] = useState(-1);
   const isInternalHistoryUpdate = useRef(false);

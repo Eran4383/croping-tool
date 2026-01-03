@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v4.5.5</title>
+  <title>Bulk Crop Pro | v4.5.6</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -97,6 +97,24 @@
     }
     .aspect-row-scroll::-webkit-scrollbar { display: none; }
 
+    select {
+      appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: left 0.75rem center;
+      background-size: 1em;
+    }
+
+    .format-selector-floating {
+      position: fixed;
+      bottom: 2rem;
+      left: 2rem;
+      z-index: 50;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      transition: transform 0.2s;
+    }
+    .format-selector-floating:hover { transform: scale(1.02); }
+
     input[type=range] {
       accent-color: var(--primary);
       cursor: pointer;
@@ -124,7 +142,7 @@
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
     import { jsPDF } from 'jspdf';
 
-    const VERSION = "v4.5.5";
+    const VERSION = "v4.5.6";
     const PADDING = 2000;
 
     const App = () => {
@@ -263,6 +281,18 @@
         setEditingIdx(newIdx);
       }, [editingIdx, crop, aspect, rotation]);
 
+      const onRotateCw = () => {
+        const nextRot = (Math.round(rotation / 90) * 90 + 90) % 360;
+        setRotation(nextRot);
+        pushToHistory({ crop, aspect, rotation: nextRot });
+      };
+
+      const onRotateCcw = () => {
+        const nextRot = (Math.round(rotation / 90) * 90 - 90 + 360) % 360;
+        setRotation(nextRot);
+        pushToHistory({ crop, aspect, rotation: nextRot });
+      };
+
       useEffect(() => {
         if (editingIdx !== null && images[editingIdx]) {
           document.body.classList.add('editor-open');
@@ -313,15 +343,41 @@
                   {images.map((img, idx) => (
                     <div key={img.id} onClick={() => setEditingIdx(idx)} className={`img-grid-item group ${img.cropped ? 'done' : ''}`}><img src={img.cropped || img.url} className="w-full h-full object-cover" /></div>
                   ))}
+                  <div title="הוספה" onClick={() => fileInputRef.current.click()} className="img-grid-item border-4 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-300 hover:text-indigo-500 hover:border-indigo-200 transition-all bg-slate-50/50">
+                    <Plus size={40}/><span className="text-xs mt-2 font-bold uppercase tracking-wider">הוסף עוד</span>
+                  </div>
                 </div>
               )}
           </main>
+
+          {images.length > 0 && editingIdx === null && (
+            <div className="format-selector-floating bg-white border border-slate-200 p-2 rounded-2xl flex items-center gap-2" style={{ direction: 'rtl' }}>
+               <div className="bg-indigo-50 p-2 rounded-xl text-indigo-600"><Settings size={18} /></div>
+               <div className="flex flex-col pr-1 pl-4">
+                  <span className="text-[10px] text-slate-400 font-bold leading-tight">פורמט שמירה גלובלי</span>
+                  <select value={globalFormat} onChange={(e) => setGlobalFormat(e.target.value)} className="bg-transparent text-sm font-black text-slate-700 outline-none cursor-pointer pr-0 pl-8 h-6">
+                    <option value="image/jpeg">JPEG</option>
+                    <option value="image/png">PNG</option>
+                    <option value="application/pdf">PDF</option>
+                  </select>
+               </div>
+            </div>
+          )}
+
           {editingIdx !== null && images[editingIdx] && (
             <div className="editor-overlay ltr-force">
               <div className="flex items-center justify-between px-4 sm:px-6 h-16 bg-black/70 shrink-0 backdrop-blur-xl border-b border-white/10 z-[10001]">
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div className="flex items-center bg-white/15 px-4 py-1.5 rounded-xl border border-white/10 shrink-0">
                     <span className="text-white font-bold text-sm">{editingIdx + 1} <span className="mx-2 opacity-30">/</span> {images.length}</span>
+                  </div>
+                  <div className="flex items-center bg-white/10 p-1 rounded-2xl border border-white/5">
+                    <button onClick={() => setIsPanMode(false)} className={`p-2.5 rounded-xl ${!isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><MousePointer2 size={18}/></button>
+                    <button onClick={() => setIsPanMode(true)} className={`p-2.5 rounded-xl ${isPanMode ? 'bg-indigo-500 text-white' : 'text-white/40'}`}><Move size={18}/></button>
+                  </div>
+                  <div className="flex items-center gap-0.5 bg-white/10 p-1 rounded-2xl border border-white/5">
+                    <button disabled={historyPointer <= 0} onClick={undo} className={`p-2 rounded-xl ${historyPointer > 0 ? 'text-white' : 'text-white/15'}`}><UndoIcon size={18}/></button>
+                    <button disabled={historyPointer >= history.length - 1} onClick={redo} className={`p-2 rounded-xl ${historyPointer < history.length - 1 ? 'text-white' : 'text-white/15'}`}><RedoIcon size={18}/></button>
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-3 flex-1">
@@ -344,8 +400,27 @@
                        <div className="aspect-row-scroll">
                           {[{l:'חופשי',v:undefined},{l:'מקורי',v:currentOriginalAspect},{l:'1:1',v:1},{l:'16:9',v:16/9},{l:'9:16',v:9/16},{l:'4:5',v:0.8}].map((a, i)=>(<button key={i} onClick={()=>onAspectChange(a.v)} className={`aspect-chip ${aspect===a.v?'active':''}`}>{a.l}</button>))}
                        </div>
+                       <div className="flex items-center gap-4 bg-white/5 p-2 rounded-xl border border-white/5">
+                          <span className="text-[11px] font-bold text-white/60 whitespace-nowrap">סיבוב:</span>
+                          <input type="range" min="-180" max="180" step="1" value={rotation > 180 ? rotation - 360 : rotation} onChange={(e) => setRotation(parseInt(e.target.value))} className="flex-1 h-1.5" />
+                          <span className="text-[11px] font-mono text-indigo-400 w-8 text-center">{Math.round(rotation)}°</span>
+                       </div>
                     </div>
-                    <button onClick={handleSave} className="bg-indigo-600 text-white px-8 h-12 rounded-xl font-black min-w-[160px]">שמור חיתוך</button>
+                    
+                    <div className="flex items-center gap-3">
+                       <div className="flex items-center gap-1 bg-white/10 p-1 rounded-2xl border border-white/5">
+                          <button onClick={onRotateCcw} className="p-2 text-white/50 hover:text-white"><RotateCcw size={18}/></button>
+                          <button onClick={onRotateCw} className="p-2 text-white/50 hover:text-white"><RotateCw size={18}/></button>
+                          <button onClick={() => setZoom(z => z * 0.8)} className="p-2 text-white/50 hover:text-white"><ZoomOut size={18}/></button>
+                          <button onClick={fitToViewport} className="p-2 text-white/50 hover:text-white"><Maximize size={18}/></button>
+                          <button onClick={() => setZoom(z => z * 1.2)} className="p-2 text-white/50 hover:text-white"><ZoomIn size={18}/></button>
+                       </div>
+                       <div className="flex items-center gap-2">
+                          <button onClick={()=>navigateTo(Math.max(0,editingIdx-1))} disabled={editingIdx===0} className="p-1 text-white/20 hover:text-white disabled:opacity-0"><ChevronRight size={32}/></button>
+                          <button onClick={handleSave} className="bg-indigo-600 text-white px-8 h-12 rounded-xl font-black min-w-[160px]">שמור חיתוך</button>
+                          <button onClick={()=>navigateTo(Math.min(images.length-1,editingIdx+1))} disabled={editingIdx===images.length-1} className="p-1 text-white/20 hover:text-white disabled:opacity-0"><ChevronLeft size={32}/></button>
+                       </div>
+                    </div>
                  </div>
               </div>
             </div>
