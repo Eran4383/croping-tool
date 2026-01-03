@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v4.6.0 - Perfect sync of all UI elements (Add More, Toolbar, Undo/Redo) between dev and docs/index.html.",
+  "description": "v4.7.0 - Fixed mobile footer visibility issues and ensured 100% code parity between dev and server files. Added compact mobile layout for editor controls.",
   "requestFramePermissions": []
 }
