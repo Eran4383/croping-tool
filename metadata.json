@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v4.5.2 - Fixed editor loading bug by correcting effect dependencies and redesigned the top menu for better spacing and clarity.",
+  "description": "v4.5.3 - Fixed editor loading bug on production servers and stabilized bottom footer layout for consistent display.",
   "requestFramePermissions": []
 }
