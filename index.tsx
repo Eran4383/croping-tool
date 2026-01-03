@@ -5,7 +5,7 @@ import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, 
 import ReactCrop, { centerCrop, makeAspectCrop, type Crop, type PixelCrop } from 'react-image-crop';
 import { jsPDF } from 'jspdf';
 
-const VERSION = "v4.5.6";
+const VERSION = "v4.6.0";
 const PADDING = 2000;
 
 interface ImageItem {
