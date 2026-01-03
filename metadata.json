@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v4.7.0 - Fixed mobile footer visibility issues and ensured 100% code parity between dev and server files. Added compact mobile layout for editor controls.",
+  "description": "v4.8.0 - Fixed mobile viewport height issues using dvh units. Synchronized all index files (root and docs) for perfect parity.",
   "requestFramePermissions": []
 }

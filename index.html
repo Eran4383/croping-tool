@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v4.5.6</title>
+  <title>Bulk Crop Pro | v4.8.0</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,94 +12,34 @@
   <link rel="stylesheet" href="https://unpkg.com/react-image-crop/dist/ReactCrop.css" />
   <style>
     :root { --primary: #4f46e5; --accent: #10b981; }
-    
-    * { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+    * { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; box-sizing: border-box; }
     *::-webkit-scrollbar { width: 6px; height: 6px; }
     *::-webkit-scrollbar-track { background: transparent; }
     *::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
-
-    body { 
-      font-family: 'Assistant', sans-serif; 
-      background: #f1f5f9; 
-      color: #0f172a; 
-      margin: 0; 
-      height: 100vh;
-      overflow: hidden; 
-      -webkit-tap-highlight-color: transparent; 
-    }
-    
-    body.editor-open { overflow: hidden !important; }
+    body { font-family: 'Assistant', sans-serif; background: #f1f5f9; color: #0f172a; margin: 0; height: 100dvh; overflow: hidden; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    body.editor-open { overflow: hidden !important; position: fixed; width: 100%; }
     .ltr-force { direction: ltr !important; }
-    
-    .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; overflow: hidden; height: 100vh; }
-    
-    .image-viewport { 
-      flex: 1; 
-      overflow: hidden; 
-      background: #0a0a0a; 
-      touch-action: none; 
-      position: relative;
-      overscroll-behavior: contain;
-      display: block; 
-    }
+    .editor-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; overflow: hidden; height: 100dvh; }
+    .image-viewport { flex: 1; overflow: hidden; background: #0a0a0a; touch-action: none; position: relative; overscroll-behavior: contain; display: block; }
     .image-viewport.pan-mode { cursor: grab; }
     .image-viewport.pan-mode:active { cursor: grabbing; }
-    
-    .image-container {
-      padding: 2000px; 
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      transform-origin: center center;
-      min-width: 100%;
-      min-height: 100%;
-    }
-
-    .crop-target-img {
-      display: block;
-      user-select: none;
-      -webkit-user-drag: none;
-      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-      will-change: width, height, transform;
-      max-width: none !important;
-    }
-    
+    .image-container { padding: 2000px; display: inline-flex; align-items: center; justify-content: center; transform-origin: center center; min-width: 100%; min-height: 100%; }
+    .crop-target-img { display: block; user-select: none; -webkit-user-drag: none; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important; will-change: width, height, transform; max-width: none !important; }
     .ReactCrop { direction: ltr !important; display: inline-block; transition: none !important; }
     .ReactCrop__crop-selection { border: 2px solid white !important; outline: 3px solid var(--primary) !important; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7) !important; }
-    
-    .is-pinching .ReactCrop__crop-selection,
-    .is-pinching .ReactCrop__drag-elements,
-    .is-pinching .ReactCrop__interaction-layer { pointer-events: none !important; }
-
-    .editor-footer { background: #111827; padding: 12px; border-top: 1px solid #374151; z-index: 10000; overflow: hidden !important; flex-shrink: 0; width: 100%; }
-    @media (min-width: 768px) { .editor-footer { padding: 12px 40px; } }
-    
-    .aspect-chip { padding: 8px 16px; background: #1f2937; color: #9ca3af; border-radius: 10px; font-size: 13px; font-weight: 700; border: 1px solid #374151; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+    .is-pinching .ReactCrop__crop-selection, .is-pinching .ReactCrop__drag-elements, .is-pinching .ReactCrop__interaction-layer { pointer-events: none !important; }
+    .editor-footer { background: #111827; padding: 10px; border-top: 1px solid #374151; z-index: 10000; flex-shrink: 0; width: 100%; }
+    @media (min-width: 768px) { .editor-footer { padding: 16px 40px; } }
+    .aspect-chip { padding: 6px 12px; background: #1f2937; color: #9ca3af; border-radius: 10px; font-size: 12px; font-weight: 700; border: 1px solid #374151; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
     .aspect-chip.active { background: var(--primary); color: white; border-color: var(--primary); }
-    
     .img-grid-item { position: relative; aspect-ratio: 1/1; border-radius: 20px; overflow: hidden; background: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); cursor: pointer; border: 2px solid transparent; transition: transform 0.2s; }
-    .img-grid-item:hover { transform: translateY(-2px); }
     .img-grid-item.done { border-color: var(--accent); }
-    
     .loading-spinner { animation: spin 1s linear infinite; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-    .aspect-row-scroll {
-      display: flex;
-      gap: 0.5rem;
-      overflow-x: auto;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-      flex-wrap: nowrap;
-      padding-bottom: 4px;
-      width: 100%;
-    }
+    .aspect-row-scroll { display: flex; gap: 0.5rem; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; flex-wrap: nowrap; padding-bottom: 2px; width: 100%; }
     .aspect-row-scroll::-webkit-scrollbar { display: none; }
-
-    input[type=range] {
-      accent-color: var(--primary);
-      cursor: pointer;
-    }
+    .format-selector-floating { position: fixed; bottom: 1.5rem; left: 1.5rem; z-index: 50; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+    input[type=range] { accent-color: var(--primary); cursor: pointer; }
   </style>
   <script type="importmap">
 {
