@@ -1,5 +1,5 @@
 {
   "name": "Bulk Crop Pro",
-  "description": "v4.8.0 - Fixed mobile viewport height issues using dvh units. Synchronized all index files (root and docs) for perfect parity.",
+  "description": "v4.9.0 - Added visual aspect ratio icons to dimension buttons and a rotation reset button next to the slider. Improved editor UI accessibility and layout efficiency.",
   "requestFramePermissions": []
 }

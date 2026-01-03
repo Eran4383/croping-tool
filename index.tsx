@@ -5,7 +5,7 @@ import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, 
 import ReactCrop, { centerCrop, makeAspectCrop, type Crop, type PixelCrop } from 'react-image-crop';
 import { jsPDF } from 'jspdf';
 
-const VERSION = "v4.8.0";
+const VERSION = "v4.9.0";
 const PADDING = 2000;
 
 interface ImageItem {
@@ -178,6 +178,10 @@ const App = () => {
     setRotation(nextRot); pushToHistory({ crop, aspect, rotation: nextRot });
   };
 
+  const resetRotation = () => {
+    setRotation(0); pushToHistory({ crop, aspect, rotation: 0 });
+  };
+
   const navigateTo = useCallback((newIdx: number | null) => {
     if (editingIdx !== null && crop) {
       setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropConfig: { crop: { ...crop }, aspect, rotation } } : img));
@@ -325,6 +329,13 @@ const App = () => {
     }
   };
 
+  const renderAspectIcon = (v: number | undefined) => {
+    if (v === undefined) return <div className="w-4 h-4 border-2 border-dashed border-current opacity-50" />;
+    if (v === 1) return <div className="w-3 h-3 border-2 border-current rounded-sm" />;
+    if (v > 1) return <div className="w-4 h-2.5 border-2 border-current rounded-sm" />;
+    return <div className="w-2.5 h-4 border-2 border-current rounded-sm" />;
+  };
+
   return (
     <div className="h-[100dvh] flex flex-col ltr-force overflow-hidden relative">
       <header className="h-14 sm:h-16 bg-white border-b px-6 flex items-center justify-between sticky top-0 z-40 shrink-0" style={{ direction: 'rtl' }}>
@@ -416,9 +427,15 @@ const App = () => {
           <div className="editor-footer" style={{ direction: 'rtl' }}>
             <div className="flex flex-col gap-2.5 max-w-6xl mx-auto w-full">
               <div className="aspect-row-scroll">
-                 {[{l:'חופשי',v:undefined},{l:'מקורי',v:currentOriginalAspect},{l:'1:1',v:1},{l:'16:9',v:16/9},{l:'9:16',v:9/16},{l:'4:5',v:0.8}].map((a, i)=>(<button key={i} onClick={()=>onAspectChange(a.v)} className={`aspect-chip flex-1 text-center min-w-[60px] ${aspect===a.v?'active':''}`}>{a.l}</button>))}
+                 {[{l:'חופשי',v:undefined},{l:'מקורי',v:currentOriginalAspect},{l:'1:1',v:1},{l:'16:9',v:16/9},{l:'9:16',v:9/16},{l:'4:5',v:0.8}].map((a, i)=>(
+                    <button key={i} onClick={()=>onAspectChange(a.v)} className={`aspect-chip flex items-center justify-center gap-2 px-3 py-1.5 ${aspect===a.v?'active':''}`}>
+                      {renderAspectIcon(a.v)}
+                      <span className="text-[11px] font-bold">{a.l}</span>
+                    </button>
+                  ))}
               </div>
               <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-xl border border-white/5">
+                <button onClick={resetRotation} className="p-1.5 text-white/50 hover:text-white bg-white/5 rounded-lg border border-white/10" title="אפס סיבוב"><RefreshCw size={14} /></button>
                 <span className="text-[10px] font-bold text-white/50 whitespace-nowrap">סיבוב:</span>
                 <input type="range" min="-180" max="180" value={rotation > 180 ? rotation - 360 : rotation} onChange={(e) => { const r = parseInt(e.target.value); setRotation(r); pushToHistory({ crop, aspect, rotation: r }); }} className="flex-1 h-1" />
                 <span className="text-[10px] font-mono text-indigo-400 w-8 text-center">{Math.round(rotation)}°</span>
