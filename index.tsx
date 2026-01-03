@@ -5,7 +5,7 @@ import { Scissors, Download, X, Check, Plus, ChevronLeft, ChevronRight, ZoomIn, 
 import ReactCrop, { centerCrop, makeAspectCrop, type Crop, type PixelCrop } from 'react-image-crop';
 import { jsPDF } from 'jspdf';
 
-const VERSION = "v4.5.1";
+const VERSION = "v4.5.2";
 const PADDING = 2000;
 
 interface ImageItem {
@@ -226,7 +226,7 @@ const App = () => {
   }, [zoom, applyZoomScroll]);
 
   useEffect(() => {
-    if (editingIdx !== null) {
+    if (editingIdx !== null && images[editingIdx]) {
       document.body.classList.add('editor-open');
       setIsPanMode(false);
       const currentImg = images[editingIdx];
@@ -247,11 +247,12 @@ const App = () => {
       setHistory([{ crop: initialCrop, aspect: initialAspect, rotation: initialRotation }]);
       setHistoryPointer(0);
 
-      setTimeout(fitToViewport, 50);
-    } else {
+      // Stable delay for DOM to ready in production environment
+      setTimeout(fitToViewport, 80);
+    } else if (editingIdx === null) {
       document.body.classList.remove('editor-open');
     }
-  }, [editingIdx, fitToViewport]);
+  }, [editingIdx, images, fitToViewport]);
 
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     imgRef.current = e.currentTarget;
@@ -560,7 +561,7 @@ const App = () => {
 
       <input type="file" ref={fileInputRef} multiple accept="image/*" className="hidden" onChange={e => handleAddImages(e.target.files)} />
 
-      {editingIdx !== null && (
+      {editingIdx !== null && images[editingIdx] && (
         <div className={`editor-overlay ltr-force ${isPinching ? 'is-pinching' : ''}`}>
           <div className="flex items-center justify-between px-4 sm:px-6 h-16 bg-black/70 shrink-0 backdrop-blur-xl border-b border-white/10">
             <div className="flex items-center gap-3 md:gap-6 flex-1 min-w-0">
