@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Bulk Crop Pro | v4.5.1</title>
+  <title>Bulk Crop Pro | v4.5.2</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -119,6 +119,7 @@
       accent-color: var(--primary);
       cursor: pointer;
     }
+    .counter-badge { font-variant-numeric: tabular-nums; }
   </style>
   <script type="importmap">
 {
@@ -142,7 +143,7 @@
     import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
     import { jsPDF } from 'jspdf';
 
-    const VERSION = "v4.5.1";
+    const VERSION = "v4.5.2";
     const PADDING = 2000;
 
     const App = () => {
@@ -204,6 +205,25 @@
         if (fileInputRef.current) fileInputRef.current.value = ''; 
       }, []);
 
+      const fitToViewport = useCallback(() => {
+        if (!viewportRef.current || !imgRef.current) return;
+        const viewport = viewportRef.current;
+        const img = imgRef.current;
+        const vw = viewport.clientWidth - 40;
+        const vh = viewport.clientHeight - 40;
+        const ratio = Math.min(vw / img.naturalWidth, vh / img.naturalHeight);
+        setZoom(ratio);
+        zoomState.current.lastZoom = ratio;
+        const zoomedW = img.naturalWidth * ratio;
+        const zoomedH = img.naturalHeight * ratio;
+        requestAnimationFrame(() => {
+          if (viewportRef.current) {
+            viewportRef.current.scrollLeft = (zoomedW / 2 + PADDING) - (viewportRef.current.clientWidth / 2);
+            viewportRef.current.scrollTop = (zoomedH / 2 + PADDING) - (viewportRef.current.clientHeight / 2);
+          }
+        });
+      }, []);
+
       const pushToHistory = useCallback((state) => {
         if (isInternalHistoryUpdate.current) return;
         setHistory(prev => {
@@ -262,7 +282,7 @@
       }, [editingIdx, crop, aspect, rotation]);
 
       useEffect(() => {
-        if (editingIdx !== null) {
+        if (editingIdx !== null && images[editingIdx]) {
           document.body.classList.add('editor-open');
           setIsPanMode(false);
           const currentImg = images[editingIdx];
@@ -272,26 +292,20 @@
           setCrop(ic); setAspect(ia); setRotation(ir);
           setHistory([{ crop: ic, aspect: ia, rotation: ir }]);
           setHistoryPointer(0);
-          setTimeout(fitToViewport, 50);
-        } else {
+          setTimeout(fitToViewport, 100);
+        } else if (editingIdx === null) {
           document.body.classList.remove('editor-open');
         }
-      }, [editingIdx]);
+      }, [editingIdx, images, fitToViewport]);
 
       const onImageLoad = (e) => { imgRef.current = e.currentTarget; fitToViewport(); };
       const onCropComplete = (pc) => { setCompletedCrop(pc); pushToHistory({ crop, aspect, rotation }); };
 
       const handleSave = async () => {
         if (!completedCrop || !imgRef.current || editingIdx === null) return;
-        setIsProcessing(true);
-        // ... same internal canvas logic ...
-        const canvas = document.createElement('canvas'); // Simplified mock for docs
         setImages(prev => prev.map((img, i) => i === editingIdx ? { ...img, cropped: img.url, cropConfig: { crop: { ...crop }, aspect, rotation } } : img));
-        setIsProcessing(false);
         setEditingIdx(null);
       };
-
-      const downloadAll = () => alert("Downloading all files...");
 
       return (
         <div className="h-screen flex flex-col ltr-force overflow-hidden relative">
@@ -300,15 +314,8 @@
               <Scissors className="text-indigo-600" size={24}/>
               <h1 className="font-extrabold text-lg flex items-center gap-2">Bulk Crop Pro <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md border border-slate-200">{VERSION}</span></h1>
             </div>
-            {images.length > 0 && (
-              <div className="flex items-center gap-2">
-                <button onClick={() => setImages([])} className="text-slate-400 hover:text-red-500 p-2"><Trash2 size={20}/></button>
-                <button onClick={downloadAll} className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg"><Download size={16}/> הורד הכל</button>
-              </div>
-            )}
           </header>
           <main className="flex-1 overflow-y-auto p-5 md:p-10" style={{ direction: 'rtl' }}>
-             {/* Gallery ... */}
              {images.length === 0 ? (
                 <div onClick={() => fileInputRef.current.click()} className="min-h-[60vh] bg-white border-4 border-dashed border-slate-200 rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer hover:border-indigo-300 transition-all">
                   <Plus size={54} className="text-indigo-600 mb-6"/><h2 className="text-2xl font-black text-slate-800">העלאת תמונות לחיתוך</h2>
@@ -321,25 +328,29 @@
                 </div>
               )}
           </main>
-          {editingIdx !== null && (
+          {editingIdx !== null && images[editingIdx] && (
             <div className="editor-overlay ltr-force">
               <div className="flex items-center justify-between px-4 sm:px-6 h-16 bg-black/70 shrink-0 backdrop-blur-xl border-b border-white/10">
-                <div className="flex items-center gap-3 md:gap-6 flex-1 min-w-0">
-                  <div className="flex items-center bg-white/15 px-3 py-1.5 rounded-xl border border-white/10 shrink-0">
-                    <span className="text-white font-bold text-xs md:text-sm tracking-tight whitespace-nowrap">
-                      {editingIdx + 1} <span className="mx-1 opacity-40">/</span> {images.length}
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="flex items-center bg-white/15 px-4 py-1.5 rounded-xl border border-white/10 shrink-0">
+                    <span className="text-white font-bold text-sm counter-badge">
+                      {editingIdx + 1} <span className="mx-2 opacity-30">/</span> {images.length}
                     </span>
                   </div>
                   <div className="flex items-center bg-white/10 p-1 rounded-2xl border border-white/5">
-                    <button onClick={() => setIsPanMode(false)} className={`p-2 rounded-xl transition-all ${!isPanMode ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}><MousePointer2 size={18}/></button>
-                    <button onClick={() => setIsPanMode(true)} className={`p-2 rounded-xl transition-all ${isPanMode ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white hover:bg-white/5'}`}><Move size={18}/></button>
-                  </div>
-                  <div className="flex items-center gap-0.5 bg-white/10 p-1 rounded-2xl border border-white/5">
-                    <button disabled={historyPointer <= 0} onClick={undo} className={`p-2 rounded-xl transition-all ${historyPointer > 0 ? 'text-white hover:bg-white/10' : 'text-white/15 cursor-not-allowed'}`}><UndoIcon size={18}/></button>
-                    <button disabled={historyPointer >= history.length - 1} onClick={redo} className={`p-2 rounded-xl transition-all ${historyPointer < history.length - 1 ? 'text-white hover:bg-white/10' : 'text-white/15 cursor-not-allowed'}`}><RedoIcon size={18}/></button>
+                    <button onClick={() => setIsPanMode(false)} className={`p-2 rounded-xl transition-all ${!isPanMode ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}><MousePointer2 size={18}/></button>
+                    <button onClick={() => setIsPanMode(true)} className={`p-2 rounded-xl transition-all ${isPanMode ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/40 hover:text-white'}`}><Move size={18}/></button>
                   </div>
                 </div>
-                <button onClick={() => navigateTo(null)} className="text-white/40 p-2 hover:text-white hover:bg-white/10 rounded-full transition-all"><X size={24}/></button>
+                <div className="hidden sm:flex items-center justify-center flex-1">
+                  <div className="flex items-center gap-1 bg-white/10 p-1 rounded-2xl border border-white/5">
+                    <button disabled={historyPointer <= 0} onClick={undo} className={`p-2 rounded-xl transition-all ${historyPointer > 0 ? 'text-white hover:bg-white/10' : 'text-white/15'}`}><UndoIcon size={18}/></button>
+                    <button disabled={historyPointer >= history.length - 1} onClick={redo} className={`p-2 rounded-xl transition-all ${historyPointer < history.length - 1 ? 'text-white hover:bg-white/10' : 'text-white/15'}`}><RedoIcon size={18}/></button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-3 flex-1">
+                  <button onClick={() => navigateTo(null)} className="text-white/40 p-2 hover:text-white rounded-full transition-all"><X size={24}/></button>
+                </div>
               </div>
               <div className={`image-viewport ${isPanMode ? 'pan-mode' : ''}`} ref={viewportRef}>
                 <div className="image-container" ref={containerRef}>
@@ -349,8 +360,7 @@
                 </div>
               </div>
               <div className="editor-footer" style={{ direction: 'rtl' }}>
-                 {/* Footer ... */}
-                 <button onClick={handleSave} className="bg-indigo-600 text-white px-6 h-10 rounded-xl font-black min-w-[120px]">שמור חיתוך</button>
+                 <button onClick={handleSave} className="bg-indigo-600 text-white px-6 h-12 rounded-xl font-black min-w-[140px]">שמור חיתוך</button>
               </div>
             </div>
           )}
